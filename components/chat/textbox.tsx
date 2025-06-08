@@ -4,7 +4,11 @@ import { Button } from "../ui/button"
 import { useRef, useState, useEffect, ChangeEvent } from "react"
 import { Textarea } from "../ui/textarea"
 
-export const Textbox = () => {
+interface TextboxProps {
+    onSend: (message: string) => void;
+}
+
+export const Textbox = ({ onSend }: TextboxProps) => {
     const [value, setValue] = useState("")
     const textareaRef = useRef<HTMLTextAreaElement>(null)
 
