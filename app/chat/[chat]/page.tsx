@@ -5,6 +5,7 @@ import { Send, Code, Play, Minimize2, Maximize2 } from 'lucide-react';
 import ChatInterface from '@/components/chat/ChatInterface';
 import CodePreview from '@/components/chat/CodePreview';
 import Sidebar from '@/components/chat/Sidebar';
+import axios from 'axios';
 
 export default function Home() {
   const [messages, setMessages] = useState<Array<{id: string, content: string, isUser: boolean}>>([]);
@@ -14,32 +15,26 @@ export default function Home() {
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
-    
-    const userMessage = {
-      id: Date.now().toString(),
-      content: input,
-      isUser: true
-    };
-    
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+
     setIsLoading(true);
-    
-    // Expand the layout
-    if (!isExpanded) {
+    setMessages(prev => [...prev, { id: Date.now().toString(), content: input, isUser: true }]);
+    setInput('');
+
+    if(!isExpanded) {
       setIsExpanded(true);
     }
+
+    console.log('Sending message:', input);
+
+    try {
+
+    } catch (error) {}
+
+    const response = await axios.post('/api/chat', {
+      prompt: input
+    }); 
     
-    // Simulate AI response after a delay
-    setTimeout(() => {
-      const aiMessage = {
-        id: (Date.now() + 1).toString(),
-        content: "I'll help you create that! Let me generate the code for you.",
-        isUser: false
-      };
-      setMessages(prev => [...prev, aiMessage]);
-      setIsLoading(false);
-    }, 1000);
+
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -66,16 +61,13 @@ export default function Home() {
               isExpanded ? 'p-6 border-b border-slate-700' : 'mb-8 text-center'
             }`}>
               <div className="flex items-center gap-2 justify-center">
-                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Code className="w-5 h-5" />
-                </div>
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                <h1 className="text-4xl font-bold bg-gradient-to-b from-zinc-300 via-zinc-600 to-zinc-800 bg-clip-text text-transparent">
                   Bolt
                 </h1>
               </div>
               {!isExpanded && (
-                <p className="text-slate-400 mt-4 text-lg">
-                  What would you like to build today?
+                <p className="bg-gradient-to-b from-zinc-400 via-zinc-500 to-zinc-700 bg-clip-text text-transparent text-lg">
+                  Enter a prompt to get started
                 </p>
               )}
             </div>
@@ -89,7 +81,7 @@ export default function Home() {
             )}
 
             {/* Input Section */}
-            <div className={`transition-all duration-500 ${
+            <div className={`transition-all duration-500 flex-shrink-0 ${
               isExpanded ? 'p-6 border-t border-slate-700' : ''
             }`}>
               <div className="relative">
@@ -100,6 +92,9 @@ export default function Home() {
                   placeholder={isExpanded ? "Ask me anything..." : "Describe what you want to build..."}
                   className="w-full bg-black border border-slate-600 rounded-xl px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 min-h-[60px]"
                   rows={isExpanded ? 3 : 4}
+                  autoFocus={isExpanded}
+                  disabled={false}
+                  readOnly={false}
                 />
                 <button
                   onClick={handleSendMessage}
@@ -115,7 +110,7 @@ export default function Home() {
 
         {/* Code/Preview Section */}
         {isExpanded && (
-          <div className="col-span-3 bg-slate-800">
+          <div className="col-span-3 bg-black">
             <CodePreview />
           </div>
         )}

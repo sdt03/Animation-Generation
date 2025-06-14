@@ -117,63 +117,67 @@ export default function TodoApp() {
   }, []);
 
   return (
-    <div className="h-full flex flex-col bg-slate-800">
+    <div className="h-[97vh] flex flex-col bg-black pt-6 pl-6">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
-        <div className="flex items-center gap-2">
+      {/* Content */}
+      <div className="flex-1 min-h-0 border border-slate-700 rounded-lg overflow-hidden">
+
+      <div className="flex items-center justify-between p-1 border-b border-slate-700 flex-shrink-0">
+      <div className="flex items-center gap-1 bg-slate-800 rounded-full">
           <button
             onClick={() => setActiveTab('code')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors text-sm ${
               activeTab === 'code'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                ? 'bg-blue-600 text-white m-1'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Code className="w-4 h-4" />
+            <Code className="w-3.5 h-3.5" />
             Code
           </button>
           <button
             onClick={() => setActiveTab('preview')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors ${
+            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-colors text-sm ${
               activeTab === 'preview'
-                ? 'bg-slate-700 text-white'
-                : 'text-slate-400 hover:text-white hover:bg-slate-700/50'
+                ? 'bg-blue-600 text-white m-1'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
             }`}
           >
-            <Play className="w-4 h-4" />
+            <Play className="w-3.5 h-3.5" />
             Preview
           </button>
         </div>
         
         <div className="flex items-center gap-2">
-          <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+          <button className="p-2 text-slate-400 hover:text-white hover:bg-black rounded-lg transition-colors">
             <Copy className="w-4 h-4" />
           </button>
-          <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+          <button className="p-2 text-slate-400 hover:text-white hover:bg-black rounded-lg transition-colors">
             <Download className="w-4 h-4" />
           </button>
-          <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+          <button className="p-2 text-slate-400 hover:text-white hover:bg-black rounded-lg transition-colors">
             <Maximize2 className="w-4 h-4" />
           </button>
         </div>
       </div>
-
-      {/* Content */}
-      <div className="flex-1 min-h-0">
-        {activeTab === 'code' ? (
-          <div className="h-full overflow-auto">
-            <div className="p-6">
-              <pre className="text-sm leading-relaxed font-mono text-slate-300 whitespace-pre-wrap">
-                <code>
-                  {streamedCode}
-                  {isStreaming && <span className="streaming-cursor" />}
-                </code>
-              </pre>
+        
+      {activeTab === 'code' ? (
+          <div className="max-h-full flex flex-col overflow-hidden">
+            <div className='text-sm text-slate-400 border-b border-slate-700 p-2 flex-shrink-0'>main.py</div>
+            <div className="flex-1 overflow-auto min-h-0">
+              <div className="pl-20 pt-6">
+                <pre className="text-sm">
+                  <code>
+                    {streamedCode}
+                    {isStreaming && <span className="streaming-cursor" />}
+                  </code>
+                </pre>
+              </div>
             </div>
           </div>
         ) : (
           <div className="h-full overflow-auto">
-            <div className="p-6">
+            <div className="pl-20 pt-6">
               <div className="bg-slate-900 rounded-lg p-8 min-h-[400px]">
                 <div className="max-w-md mx-auto">
                   <div className="bg-white rounded-lg p-6 shadow-lg">
@@ -191,27 +195,6 @@ export default function TodoApp() {
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg">
-                        <input type="checkbox" className="w-4 h-4" />
-                        <span className="flex-1 text-gray-800">Learn React</span>
-                        <button className="text-red-500 hover:text-red-700 px-2 py-1 rounded text-sm">
-                          Delete
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg">
-                        <input type="checkbox" checked className="w-4 h-4" />
-                        <span className="flex-1 text-gray-500 line-through">Build Todo App</span>
-                        <button className="text-red-500 hover:text-red-700 px-2 py-1 rounded text-sm">
-                          Delete
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg">
-                        <input type="checkbox" className="w-4 h-4" />
-                        <span className="flex-1 text-gray-800">Deploy to production</span>
-                        <button className="text-red-500 hover:text-red-700 px-2 py-1 rounded text-sm">
-                          Delete
-                        </button>
-                      </div>
                     </div>
 
                     <div className="mt-6 text-center text-sm text-gray-600">
