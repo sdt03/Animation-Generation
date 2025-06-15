@@ -8,106 +8,13 @@ export default function CodePreview() {
   const [streamedCode, setStreamedCode] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
 
-  const sampleCode = `import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-
-export default function TodoApp() {
-  const [todos, setTodos] = useState([]);
-  const [inputValue, setInputValue] = useState('');
-
-  const addTodo = () => {
-    if (inputValue.trim()) {
-      setTodos([...todos, {
-        id: Date.now(),
-        text: inputValue,
-        completed: false
-      }]);
-      setInputValue('');
-    }
-  };
-
-  const toggleTodo = (id) => {
-    setTodos(todos.map(todo =>
-      todo.id === id 
-        ? { ...todo, completed: !todo.completed }
-        : todo
-    ));
-  };
-
-  const deleteTodo = (id) => {
-    setTodos(todos.filter(todo => todo.id !== id));
-  };
-
-  return (
-    <div className="max-w-md mx-auto mt-8 p-6">
-      <Card className="p-6 shadow-lg">
-        <h1 className="text-2xl font-bold mb-4 text-center">Todo App</h1>
-        
-        <div className="flex gap-2 mb-4">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Add a new todo..."
-            className="flex-1 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onKeyPress={(e) => e.key === 'Enter' && addTodo()}
-          />
-          <Button onClick={addTodo} className="px-4 py-2">
-            Add
-          </Button>
-        </div>
-
-        <ul className="space-y-2">
-          {todos.map(todo => (
-            <li
-              key={todo.id}
-              className="flex items-center gap-2 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <input
-                type="checkbox"
-                checked={todo.completed}
-                onChange={() => toggleTodo(todo.id)}
-                className="w-4 h-4"
-              />
-              <span className={todo.completed ? 'line-through text-gray-500 flex-1' : 'flex-1'}>
-                {todo.text}
-              </span>
-              <button
-                onClick={() => deleteTodo(todo.id)}
-                className="text-red-500 hover:text-red-700 px-2 py-1 rounded"
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
-
-        {todos.length === 0 && (
-          <p className="text-center text-gray-500 mt-4">
-            No todos yet. Add one above!
-          </p>
-        )}
-
-        <div className="mt-6 text-center text-sm text-gray-600">
-          Total: {todos.length} | Completed: {todos.filter(t => t.completed).length}
-        </div>
-      </Card>
-    </div>
-  );
-}`;
 
   useEffect(() => {
     // Simulate streaming code generation
     const streamCode = async () => {
       setIsStreaming(true);
       setStreamedCode('');
-      
-      for (let i = 0; i <= sampleCode.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-        setStreamedCode(sampleCode.slice(0, i));
-      }
-      
+  
       setIsStreaming(false);
     };
 
