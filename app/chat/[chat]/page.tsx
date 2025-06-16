@@ -12,7 +12,7 @@ export default function Home() {
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
+  const [code, setCode] = useState('');
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
@@ -27,14 +27,42 @@ export default function Home() {
     console.log('Sending message:', input);
 
     try {
-
-    } catch (error) {}
-
-    const response = await axios.post('/api/chat', {
-      prompt: input
-    }); 
+      const aiResponse = "Sure here is the code:";
+      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), content: aiResponse, isUser: false }]);
+      
+      const response = await axios.post('/api/chat', {
+        prompt: input
+      });
+      
+      const fullResponse = response.data.message;
+      
+      const codeBlockRegex = /```[\s\S]*?```/g;
+      const codeMatches = fullResponse.match(codeBlockRegex);
+      const textPart = fullResponse.replace(codeBlockRegex, '').trim();
+      
+      if (textPart && textPart !== aiResponse) {
+        setMessages(prev => prev.map(msg => 
+          msg.content === aiResponse && !msg.isUser 
+            ? { ...msg, content: textPart }
+            : msg
+        ));
+      }
+      
+      if (codeMatches && codeMatches.length > 0) {
+        setCode(codeMatches[0]);
+      }
+      
+    } catch (error) {
+      console.error('Error in chat API:', error);
+      const simpleCode = `\`\`\`javascript
+const greeting = "Hello World!";
+console.log(greeting);
+alert("Code is working!");
+\`\`\``;
+      setCode(simpleCode);
+    }
     
-
+    setIsLoading(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -111,7 +139,7 @@ export default function Home() {
         {/* Code/Preview Section */}
         {isExpanded && (
           <div className="col-span-3 bg-black">
-            <CodePreview />
+            <CodePreview code={code} />
           </div>
         )}
       </div>

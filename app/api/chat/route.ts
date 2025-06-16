@@ -3,6 +3,7 @@ import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 import ollama from "ollama";
 
+
 export async function POST(req: NextRequest) {
     const { prompt } = await req.json();
 
@@ -10,12 +11,14 @@ export async function POST(req: NextRequest) {
 
     try {
         const response = await ollama.chat({
-            model: "llama3.1:8b",
+            model: "llama3.2:1b",
             messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: prompt }
             ]
         });
+        console.log("system prompt", systemPrompt);
+        console.log("prompt", prompt);
 
         console.log(response.message.content);
 

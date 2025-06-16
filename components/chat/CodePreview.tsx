@@ -3,25 +3,43 @@
 import { useState, useEffect } from 'react';
 import { Code, Play, Copy, Download, Maximize2 } from 'lucide-react';
 
-export default function CodePreview() {
+export default function CodePreview({ code }: {
+  code: string;
+}) {
   const [activeTab, setActiveTab] = useState<'code' | 'preview'>('code');
   const [streamedCode, setStreamedCode] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
 
 
   useEffect(() => {
-    // Simulate streaming code generation
-    const streamCode = async () => {
+    if (code) {
       setIsStreaming(true);
       setStreamedCode('');
-  
-      setIsStreaming(false);
-    };
-
-    // Start streaming after component mounts
-    const timer = setTimeout(streamCode, 1000);
-    return () => clearTimeout(timer);
-  }, []);
+      
+      // Strip code block markers from start and end
+      let cleanedCode = code;
+      if (cleanedCode.startsWith('```')) {
+        cleanedCode = cleanedCode.replace(/^```[a-zA-Z]*\n?/, '');
+      }
+      if (cleanedCode.endsWith('```')) {
+        cleanedCode = cleanedCode.replace(/\n?```$/, '');
+      }
+      
+      // Simulate streaming the actual code
+      let index = 0;
+      const streamInterval = setInterval(() => {
+        if (index < cleanedCode.length) {
+          setStreamedCode(cleanedCode.slice(0, index + 1));
+          index++;
+        } else {
+          setIsStreaming(false);
+          clearInterval(streamInterval);
+        }
+      }, 20); // Adjust speed as needed
+      
+      return () => clearInterval(streamInterval);
+    }
+  }, [code]);
 
   return (
     <div className="h-[97vh] flex flex-col bg-black pt-6 pl-6">
@@ -70,7 +88,7 @@ export default function CodePreview() {
         
       {activeTab === 'code' ? (
           <div className="max-h-full flex flex-col overflow-hidden">
-            <div className='text-sm text-slate-400 border-b border-slate-700 p-2 flex-shrink-0'>main.py</div>
+            <div className='text-sm text-slate-400 border-b border-slate-700 p-2 flex-shrink-0'>index.js</div>
             <div className="flex-1 overflow-auto min-h-0">
               <div className="pl-20 pt-6">
                 <pre className="text-sm">
