@@ -80,11 +80,7 @@ alert("Code is working!");
       <div className={`transition-layout duration-500 ease-in-out ${
         isExpanded ? 'grid grid-cols-5 h-screen' : 'flex items-center justify-center min-h-screen'
       }`}>
-        <Sidebar title="Chats" />
-
-        <div className="text-white">
-          {session?.user.id}
-        </div>
+        <Sidebar title="Chats" session={session} />
         
         {/* Chat Section */}
         <div className={`transition-layout duration-500 ease-in-out ${

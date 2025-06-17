@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { SidebarClose, SidebarOpen, Plus, SquarePen } from "lucide-react";
 import { Session } from "next-auth";
 import { Button } from "../ui/button";
+import { useRouter } from "next/navigation";
 
 interface Conversation {
   id: string;
@@ -18,6 +19,7 @@ export default function Sidebar({ title, session }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchConversations = async () => {
@@ -37,6 +39,21 @@ export default function Sidebar({ title, session }: SidebarProps) {
 
     fetchConversations();
   }, [session]);
+
+  const handleNewChat = async () => {
+    try {
+      const response = await fetch('/api/new-chat', {
+        method: 'POST',
+      });
+      const data = await response.json();
+      
+      if (data.conversationId) {
+        router.push(`/chat/${data.conversationId}`);
+      }
+    } catch (error) {
+      console.error('Error creating new chat:', error);
+    }
+  };
 
   return (
     <div className="fixed inset-y-0 left-0 z-10">
@@ -61,7 +78,7 @@ export default function Sidebar({ title, session }: SidebarProps) {
           <Button
             variant="secondary"
             className="w-full py-2 mb-6 text-black rounded-md flex items-center justify-center gap-2 transition-colors duration-200"
-            onClick={() => {/* Add new conversation logic */}}
+            onClick={handleNewChat}
           >
             <Plus size={18} />
             <span>New Chat</span>
@@ -116,7 +133,7 @@ export default function Sidebar({ title, session }: SidebarProps) {
         {/* New note button with tooltip */}
         <div className="group relative">
           <button
-            onClick={()=>{}}
+            onClick={handleNewChat}
             className="flex items-center justify-center p-2 bg-black text-white rounded-md hover:bg-gray-800 transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <SquarePen size={24} />
