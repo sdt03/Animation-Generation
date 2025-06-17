@@ -6,8 +6,10 @@ import ChatInterface from '@/components/chat/ChatInterface';
 import CodePreview from '@/components/chat/CodePreview';
 import Sidebar from '@/components/chat/Sidebar';
 import axios from 'axios';
+import { useSession } from 'next-auth/react';
 
 export default function Home() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<Array<{id: string, content: string, isUser: boolean}>>([]);
   const [input, setInput] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -71,6 +73,7 @@ alert("Code is working!");
       handleSendMessage();
     }
   };
+  console.log(`current user id: ${session?.user?.id}`);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -78,6 +81,10 @@ alert("Code is working!");
         isExpanded ? 'grid grid-cols-5 h-screen' : 'flex items-center justify-center min-h-screen'
       }`}>
         <Sidebar title="Chats" />
+
+        <div className="text-white">
+          {session?.user.id}
+        </div>
         
         {/* Chat Section */}
         <div className={`transition-layout duration-500 ease-in-out ${
