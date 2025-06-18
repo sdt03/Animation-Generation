@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Send, Code, Play, Minimize2, Maximize2 } from 'lucide-react';
+import { Send } from 'lucide-react';
 import ChatInterface from '@/components/chat/ChatInterface';
 import CodePreview from '@/components/chat/CodePreview';
 import Sidebar from '@/components/chat/Sidebar';
 import axios from 'axios';
 import { useSession } from 'next-auth/react';
+import { useParams } from 'next/navigation';
 
 export default function Home() {
   const { data: session } = useSession();
@@ -15,6 +16,9 @@ export default function Home() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [code, setCode] = useState('');
+  const [refreshConversations, setRefreshConversations] = useState(0);
+  const params = useParams();
+  
   const handleSendMessage = async () => {
     if (!input.trim()) return;
 
@@ -31,9 +35,11 @@ export default function Home() {
     try {
       const aiResponse = "Sure here is the code:";
       setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), content: aiResponse, isUser: false }]);
+      const conversationId = params.chat;
       
-      const response = await axios.post('/api/chat', {
-        prompt: input
+      const response = await axios.post('/api/send-message', {
+        prompt: input,
+        conversationId: conversationId
       });
       
       const fullResponse = response.data.message;
@@ -53,6 +59,9 @@ export default function Home() {
       if (codeMatches && codeMatches.length > 0) {
         setCode(codeMatches[0]);
       }
+      
+      // Trigger refresh of conversations in sidebar
+      setRefreshConversations(prev => prev + 1);
       
     } catch (error) {
       console.error('Error in chat API:', error);
@@ -80,7 +89,11 @@ alert("Code is working!");
       <div className={`transition-layout duration-500 ease-in-out ${
         isExpanded ? 'grid grid-cols-5 h-screen' : 'flex items-center justify-center min-h-screen'
       }`}>
-        <Sidebar title="Chats" session={session} />
+        <Sidebar 
+          title="Chats" 
+          session={session} 
+          refreshTrigger={refreshConversations}
+        />
         
         {/* Chat Section */}
         <div className={`transition-layout duration-500 ease-in-out ${

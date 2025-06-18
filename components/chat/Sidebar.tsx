@@ -13,32 +13,33 @@ interface Conversation {
 interface SidebarProps {
   title: string;
   session?: Session | null;
+  refreshTrigger?: number;
 }
 
-export default function Sidebar({ title, session }: SidebarProps) {
+export default function Sidebar({ title, session, refreshTrigger }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchConversations = async () => {
-      if (session?.user) {
-        try {
-          setLoading(true);
-          const response = await fetch('/api/fetch-conversations');
-          const data = await response.json();
-          setConversations(data.conversations || []);
-        } catch (error) {
-          console.error('Error fetching conversations:', error);
-        } finally {
-          setLoading(false);
-        }
+  const fetchConversations = async () => {
+    if (session?.user) {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/fetch-conversations');
+        const data = await response.json();
+        setConversations(data.conversations || []);
+      } catch (error) {
+        console.error('Error fetching conversations:', error);
+      } finally {
+        setLoading(false);
       }
-    };
+    }
+  };
 
+  useEffect(() => {
     fetchConversations();
-  }, [session]);
+  }, [session, refreshTrigger]);
 
   const handleNewChat = async () => {
     try {
@@ -95,6 +96,7 @@ export default function Sidebar({ title, session }: SidebarProps) {
                   <li 
                     key={conversation.id}
                     className="p-2 hover:bg-gray-800 rounded cursor-pointer transition-colors duration-200 truncate"
+                    onClick={() => router.push(`/chat/${conversation.id}`)}
                   >
                     {conversation.title || "Untitled Conversation"}
                   </li>
