@@ -21,3 +21,6 @@ declare module "next-auth/jwt" {
     id: string
   }
 }
+
+declare module 'react-syntax-highlighter';
+declare module 'react-syntax-highlighter/dist/esm/styles/prism';
