@@ -148,18 +148,21 @@ export const BrowserIDE = ({ code, onCodeChange }: BrowserIDEProps) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 mt-4 mx-4 rounded-lg border border-zinc-700">
+    <div
+      className="flex flex-col bg-zinc-900 mt-4 mb-4 mx-4 rounded-lg border border-zinc-700"
+      style={{ height: "calc(100vh - 2rem)" }}
+    >
       {/* Header with Tabs */}
-      <div className="flex items-center justify-between p-4 border-b border-zinc-700">
-        <div className="flex items-center space-x-1">
+      <div className="flex items-center justify-between p-4 border-b border-zinc-700 bg-zinc-800">
+        <div className="flex items-center space-x-1 bg-zinc-700 rounded-full p-1">
           <Button
             variant={activeTab === "code" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("code")}
             className={`${
               activeTab === "code"
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-blue-600 text-white rounded-full"
+                : "text-zinc-400 hover:text-white rounded-full"
             }`}
           >
             <FileCode className="w-4 h-4 mr-2" />
@@ -171,8 +174,8 @@ export const BrowserIDE = ({ code, onCodeChange }: BrowserIDEProps) => {
             onClick={() => setActiveTab("preview")}
             className={`${
               activeTab === "preview"
-                ? "bg-blue-600 text-white"
-                : "text-zinc-400 hover:text-white"
+                ? "bg-blue-600 text-white rounded-full"
+                : "text-zinc-400 hover:text-white rounded-full"
             }`}
           >
             <Monitor className="w-4 h-4 mr-2" />
