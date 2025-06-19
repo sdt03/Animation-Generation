@@ -26,10 +26,25 @@ export const BrowserIDE = ({ code, onCodeChange }: BrowserIDEProps) => {
   const [editableCode, setEditableCode] = useState(code);
   const [isRunning, setIsRunning] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [detectedLanguage, setDetectedLanguage] = useState("");
 
-  // Update editable code when prop changes
+  // Update editable code and language when prop changes
   useEffect(() => {
-    setEditableCode(code);
+    // Remove markdown code fences if present and extract language
+    let cleaned = code;
+    let language = "";
+    const match = cleaned.match(/^```([a-zA-Z0-9_-]*)\n/);
+    if (match) {
+      language = match[1];
+      cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\n/, "");
+      cleaned = cleaned.replace(/```\s*$/, "");
+    } else {
+      // Remove just triple backticks if present
+      cleaned = cleaned.replace(/^```\n/, "");
+      cleaned = cleaned.replace(/```\s*$/, "");
+    }
+    setEditableCode(cleaned);
+    setDetectedLanguage(language);
   }, [code]);
 
   // Auto-run preview when code changes
@@ -208,16 +223,42 @@ export const BrowserIDE = ({ code, onCodeChange }: BrowserIDEProps) => {
       {/* Content Area */}
       <div className="flex-1 overflow-hidden">
         {activeTab === "code" ? (
-          <div className="h-full flex flex-col">
+          <div className="h-full flex flex-col flex-1 pt-1">
+            {/* Show language if detected */}
+            {detectedLanguage && (
+              <div style={{ fontSize: '0.9em', color: '#aaa', marginBottom: 4, marginLeft: 8 }}>
+                {detectedLanguage}
+              </div>
+            )}
             {editableCode ? (
-              <ScrollArea className="flex-1">
+              <>
+                <style jsx global>{`
+                  .ide-scrollbar-bg::-webkit-scrollbar {
+                    width: 10px;
+                  }
+                  .ide-scrollbar-bg::-webkit-scrollbar-track {
+                    background: #18181b;
+                  }
+                  .ide-scrollbar-bg::-webkit-scrollbar-thumb {
+                    background: #3f3f46;
+                    border-radius: 4px;
+                  }
+                  .ide-scrollbar-bg::-webkit-scrollbar-thumb:hover {
+                    background: #52525b;
+                  }
+                  .ide-scrollbar-bg {
+                    scrollbar-width: thin;
+                    scrollbar-color: #3f3f46 #18181b;
+                  }
+                `}</style>
                 <Textarea
                   value={editableCode}
                   onChange={(e) => handleCodeChange(e.target.value)}
-                  className="min-h-full w-full resize-none border-0 bg-zinc-800 text-white font-mono text-sm focus:ring-0 focus:outline-none rounded-none"
+                  className="flex-1 min-h-0 w-full resize-none border-0 text-white font-mono text-sm focus:ring-0 focus:outline-none rounded-none ide-scrollbar-bg"
                   placeholder="Generated code will appear here..."
+                  style={{ height: '100%' }}
                 />
-              </ScrollArea>
+              </>
             ) : (
               <div className="flex-1 flex items-center justify-center text-zinc-500">
                 <div className="text-center">

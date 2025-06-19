@@ -72,14 +72,47 @@ export default function ChatPage() {
         const response = await axios.get(`/api/fetch-messages?conversationId=${conversationId}`);
         
         if (response.status === 200 && response.data.messages) {
-          setMessages(response.data.messages);
+          let latestCode = "";
+          const processedMessages = response.data.messages.map((msg: Message) => {
+            if (msg.sender === "llm") {
+              // Extract EXPLANATION, CODE, and any trailing explanation
+              const explanationMatch = msg.content.match(/EXPLANATION:\s*([\s\S]*?)(?=CODE:|$)/);
+              // CODE: up to the next triple backticks and then explanation after that
+              const codeMatch = msg.content.match(/CODE:\s*([\s\S]*?```[\s\S]*?```)/);
+              let afterCode = "";
+              if (codeMatch) {
+                // Find anything after the closing triple backticks
+                const codeBlock = codeMatch[1];
+                const afterCodeIdx = msg.content.indexOf(codeBlock) + codeBlock.length;
+                if (afterCodeIdx < msg.content.length) {
+                  afterCode = msg.content.slice(afterCodeIdx).trim();
+                }
+              }
+              let explanation = "";
+              if (explanationMatch) explanation += explanationMatch[1].trim();
+              if (afterCode) {
+                explanation += (explanation ? "\n\n" : "") + afterCode;
+              }
+              // Remove any code blocks from explanation
+              explanation = explanation.replace(/```[\s\S]*?```/g, "");
+              if (codeMatch) {
+                latestCode = codeMatch[1].trim();
+              }
+              return { ...msg, content: explanation.trim() };
+            }
+            return msg;
+          });
+          setMessages(processedMessages);
+          setGeneratedCode(latestCode);
         } else {
           setMessages([]);
+          setGeneratedCode("");
         }
       }
     } catch (error) {
       console.error("Error loading conversation:", error);
       setMessages([]);
+      setGeneratedCode("");
     }
   };
 
@@ -140,31 +173,34 @@ export default function ChatPage() {
         const fullResponse = response.data.message;
         let explanation = "";
         let code = "";
-        
-        // Look for EXPLANATION: and CODE: patterns
         const explanationMatch = fullResponse.match(/EXPLANATION:\s*([\s\S]*?)(?=CODE:|$)/);
-        const codeMatch = fullResponse.match(/CODE:\s*([\s\S]*)/);
-        
-        if (explanationMatch) {
-          explanation = explanationMatch[1].trim();
+        const codeMatch = fullResponse.match(/CODE:\s*([\s\S]*?```[\s\S]*?```)/);
+        let afterCode = "";
+        if (codeMatch) {
+          const codeBlock = codeMatch[1];
+          const afterCodeIdx = fullResponse.indexOf(codeBlock) + codeBlock.length;
+          if (afterCodeIdx < fullResponse.length) {
+            afterCode = fullResponse.slice(afterCodeIdx).trim();
+          }
         }
-        
+        if (explanationMatch) explanation += explanationMatch[1].trim();
+        if (afterCode) {
+          explanation += (explanation ? "\n\n" : "") + afterCode;
+        }
+        // Remove any code blocks from explanation
+        explanation = explanation.replace(/```[\s\S]*?```/g, "");
         if (codeMatch) {
           code = codeMatch[1].trim();
           setGeneratedCode(code);
         }
-        
         // Add AI response to messages (only explanation part)
         const aiMessage: Message = {
           id: `ai-${Date.now()}`,
-          content: explanation || "Here's your code!",
+          content: explanation.trim() || "Here's your code!",
           sender: "llm",
           createdAt: new Date().toISOString(),
         };
-        
         setMessages(prev => [...prev, aiMessage]);
-        
-        // Refresh conversations to update titles
         fetchConversations();
       }
     } catch (error) {
