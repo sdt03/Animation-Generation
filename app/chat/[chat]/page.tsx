@@ -1,161 +1,222 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { Send } from 'lucide-react';
-import ChatInterface from '@/components/chat/ChatInterface';
-import CodePreview from '@/components/chat/CodePreview';
-import Sidebar from '@/components/chat/Sidebar';
-import axios from 'axios';
-import { useSession } from 'next-auth/react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useRef } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { LeftSidebar } from "@/components/chat/LeftSidebar";
+import { ChatInterface } from "@/components/chat/ChatInterface";
+import { BrowserIDE } from "@/components/chat/BrowserIDE";
+import { Button } from "@/components/ui/button";
+import { Menu, X } from "lucide-react";
+import { useSession } from "next-auth/react";
+import axios from "axios";
 
-export default function Home() {
+interface Message {
+  id: string;
+  content: string;
+  sender: "user" | "llm";
+  createdAt: string;
+}
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function ChatPage() {
   const { data: session } = useSession();
-  const [messages, setMessages] = useState<Array<{id: string, content: string, isUser: boolean}>>([]);
-  const [input, setInput] = useState('');
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [code, setCode] = useState('');
-  const [refreshConversations, setRefreshConversations] = useState(0);
   const params = useParams();
-  
-  const handleSendMessage = async () => {
-    if (!input.trim()) return;
+  const router = useRouter();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [generatedCode, setGeneratedCode] = useState("");
+
+  const chatId = params.chat as string;
+
+  // Fetch conversations on component mount
+  useEffect(() => {
+    fetchConversations();
+  }, []);
+
+  // Load specific conversation when chatId changes
+  useEffect(() => {
+    if (chatId && conversations.length > 0) {
+      loadConversation(chatId);
+    }
+  }, [chatId, conversations]);
+
+  const fetchConversations = async () => {
+    try {
+      const response = await axios.get("/api/fetch-conversations");
+      
+      if (response.status === 200 && response.data.conversations) {
+        setConversations(response.data.conversations);
+      }
+    } catch (error) {
+      console.error("Error fetching conversations:", error);
+    }
+  };
+
+  const loadConversation = async (conversationId: string) => {
+    try {
+      const conversation = conversations.find(c => c.id === conversationId);
+      if (conversation) {
+        setCurrentConversation(conversation);
+        
+        // Fetch full message history for the conversation
+        const response = await axios.get(`/api/fetch-messages?conversationId=${conversationId}`);
+        
+        if (response.status === 200 && response.data.messages) {
+          setMessages(response.data.messages);
+        } else {
+          setMessages([]);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading conversation:", error);
+      setMessages([]);
+    }
+  };
+
+  const createNewChat = async () => {
+    try {
+      const response = await axios.post("/api/new-chat");
+
+      if (response.status === 200) {
+        router.push(`/chat/${response.data.conversationId}`);
+        fetchConversations(); // Refresh the conversations list
+      }
+    } catch (error) {
+      console.error("Error creating new chat:", error);
+    }
+  };
+
+  const sendMessage = async (content: string) => {
+    let conversationId = currentConversation?.id;
+    
+    if (!conversationId) {
+      // If no current conversation, create a new one first
+      try {
+        const response = await axios.post("/api/new-chat");
+        
+        if (response.status === 200) {
+          conversationId = response.data.conversationId;
+          router.push(`/chat/${conversationId}`);
+        } else {
+          console.error("Failed to create new chat");
+          return;
+        }
+      } catch (error) {
+        console.error("Error creating new chat:", error);
+        return;
+      }
+    }
 
     setIsLoading(true);
-    setMessages(prev => [...prev, { id: Date.now().toString(), content: input, isUser: true }]);
-    setInput('');
-
-    if(!isExpanded) {
-      setIsExpanded(true);
-    }
-
-    console.log('Sending message:', input);
+    
+    // Add user message immediately to UI
+    const userMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content,
+      sender: "user",
+      createdAt: new Date().toISOString(),
+    };
+    
+    setMessages(prev => [...prev, userMessage]);
 
     try {
-      const aiResponse = "Sure here is the code:";
-      setMessages(prev => [...prev, { id: (Date.now() + 1).toString(), content: aiResponse, isUser: false }]);
-      const conversationId = params.chat;
-      
-      const response = await axios.post('/api/send-message', {
-        prompt: input,
-        conversationId: conversationId
+      const response = await axios.post("/api/send-message", {
+          conversationId: conversationId,
+          prompt: content,
       });
-      
-      const fullResponse = response.data.message;
-      
-      const codeBlockRegex = /```[\s\S]*?```/g;
-      const codeMatches = fullResponse.match(codeBlockRegex);
-      const textPart = fullResponse.replace(codeBlockRegex, '').trim();
-      
-      if (textPart && textPart !== aiResponse) {
-        setMessages(prev => prev.map(msg => 
-          msg.content === aiResponse && !msg.isUser 
-            ? { ...msg, content: textPart }
-            : msg
-        ));
-      }
-      
-      if (codeMatches && codeMatches.length > 0) {
-        setCode(codeMatches[0]);
-      }
-      
-      // Trigger refresh of conversations in sidebar
-      setRefreshConversations(prev => prev + 1);
-      
-    } catch (error) {
-      console.error('Error in chat API:', error);
-      const simpleCode = `\`\`\`javascript
-const greeting = "Hello World!";
-console.log(greeting);
-alert("Code is working!");
-\`\`\``;
-      setCode(simpleCode);
-    }
-    
-    setIsLoading(false);
-  };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
+      if (response.status === 200) {
+        // Parse the AI response to separate explanation and code
+        const fullResponse = response.data.message;
+        let explanation = "";
+        let code = "";
+        
+        // Look for EXPLANATION: and CODE: patterns
+        const explanationMatch = fullResponse.match(/EXPLANATION:\s*([\s\S]*?)(?=CODE:|$)/);
+        const codeMatch = fullResponse.match(/CODE:\s*([\s\S]*)/);
+        
+        if (explanationMatch) {
+          explanation = explanationMatch[1].trim();
+        }
+        
+        if (codeMatch) {
+          code = codeMatch[1].trim();
+          setGeneratedCode(code);
+        }
+        
+        // Add AI response to messages (only explanation part)
+        const aiMessage: Message = {
+          id: `ai-${Date.now()}`,
+          content: explanation || "Here's your code!",
+          sender: "llm",
+          createdAt: new Date().toISOString(),
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+        
+        // Refresh conversations to update titles
+        fetchConversations();
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
-  console.log(`current user id: ${session?.user?.id}`);
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className={`transition-layout duration-500 ease-in-out ${
-        isExpanded ? 'grid grid-cols-5 h-screen' : 'flex items-center justify-center min-h-screen'
+    <div className="relative h-screen bg-zinc-900 text-white">
+      {/* Toggle Button */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="fixed top-4 left-4 z-50 bg-zinc-800 hover:bg-zinc-700"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+      >
+        {sidebarOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+      </Button>
+
+      {/* Overlay Sidebar */}
+      <div className={`fixed left-0 top-0 h-full w-80 z-40 transform transition-transform duration-300 ease-in-out ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full'
       }`}>
-        <Sidebar 
-          title="Chats" 
-          session={session} 
-          refreshTrigger={refreshConversations}
+        <LeftSidebar
+          conversations={conversations}
+          currentConversationId={chatId}
+          onConversationSelect={(id) => router.push(`/chat/${id}`)}
+          onNewChat={createNewChat}
         />
-        
-        {/* Chat Section */}
-        <div className={`transition-layout duration-500 ease-in-out ${
-          isExpanded ? 'col-span-2 border-r border-slate-700' : 'w-full max-w-2xl mx-auto px-6'
-        }`}>
-          <div className="flex flex-col h-full">
-            {/* Header */}
-            <div className={`transition-all duration-500 ${
-              isExpanded ? 'p-6 border-b border-slate-700' : 'mb-8 text-center'
-            }`}>
-              <div className="flex items-center gap-2 justify-center">
-                <h1 className="text-4xl font-bold bg-gradient-to-b from-zinc-300 via-zinc-600 to-zinc-800 bg-clip-text text-transparent">
-                  Bolt
-                </h1>
-              </div>
-              {!isExpanded && (
-                <p className="bg-gradient-to-b from-zinc-400 via-zinc-500 to-zinc-700 bg-clip-text text-transparent text-lg">
-                  Enter a prompt to get started
-                </p>
-              )}
-            </div>
+      </div>
 
-            {/* Chat Messages */}
-            {isExpanded && (
-              <ChatInterface 
-                messages={messages} 
-                isLoading={isLoading} 
-              />
-            )}
-
-            {/* Input Section */}
-            <div className={`transition-all duration-500 flex-shrink-0 ${
-              isExpanded ? 'p-6 border-t border-slate-700' : ''
-            }`}>
-              <div className="relative">
-                <textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder={isExpanded ? "Ask me anything..." : "Describe what you want to build..."}
-                  className="w-full bg-black border border-slate-600 rounded-xl px-4 py-3 pr-12 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 min-h-[60px]"
-                  rows={isExpanded ? 3 : 4}
-                  autoFocus={isExpanded}
-                  disabled={false}
-                  readOnly={false}
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!input.trim() || isLoading}
-                  className="absolute right-3 bottom-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed p-2 rounded-lg transition-colors duration-200"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
+      {/* Main Content Area - Full Width */}
+      <div className="flex h-full">
+        {/* Chat Interface */}
+        <div className={`${messages.length === 0 && !isLoading ? 'w-full' : 'w-1/2'} ${messages.length > 0 || isLoading ? 'border-r border-zinc-700' : ''} transition-all duration-300 ease-in-out`}>
+          <ChatInterface
+            messages={messages}
+            onSendMessage={sendMessage}
+            isLoading={isLoading}
+            conversationTitle={currentConversation?.title || "New Chat"}
+          />
         </div>
 
-        {/* Code/Preview Section */}
-        {isExpanded && (
-          <div className="col-span-3 bg-black">
-            <CodePreview code={code} />
+        {/* Browser IDE - Only show when there are messages or loading */}
+        {(messages.length > 0 || isLoading) && (
+          <div className="w-1/2 animate-in slide-in-from-right duration-300">
+            <BrowserIDE
+              code={generatedCode}
+              onCodeChange={setGeneratedCode}
+            />
           </div>
         )}
       </div>
