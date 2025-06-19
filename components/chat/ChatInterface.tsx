@@ -193,30 +193,30 @@ export const ChatInterface = ({
           {/* Fixed Input Area at Bottom for Messages View */}
           <div className="flex-shrink-0 p-4 border-t border-zinc-700 bg-zinc-900">
             <div className="max-w-4xl mx-auto">
-              <form onSubmit={handleSubmit} className="flex space-x-3">
-                <div className="flex-1">
+              <form onSubmit={handleSubmit}>
+                <div className="relative">
                   <Textarea
                     ref={textareaRef}
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder="Ask me anything about animations and code..."
-                    className="min-h-[48px] max-h-32 resize-none bg-zinc-800 border-zinc-600 text-white placeholder-zinc-400 focus:border-blue-500 rounded-xl px-4 py-3"
+                    className="min-h-[48px] max-h-32 resize-none bg-zinc-800 border-zinc-600 text-white placeholder-zinc-400 focus:border-blue-500 rounded-xl px-4 py-3 pr-12 w-full"
                     disabled={isLoading}
                   />
-                </div>
                 <Button
-                  type="submit"
-                  size="icon"
-                  disabled={!inputValue.trim() || isLoading}
-                  className="h-10 w-10 bg-white rounded-xl rounded-full cursor-pointer text-black"
-                >
-                  {isLoading ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <ArrowUp className="w-5 h-5" />
-                  )}
-                </Button>
+                    type="submit"
+                    size="icon"
+                    disabled={!inputValue.trim() || isLoading}
+                    className="absolute right-2 bottom-2 h-8 w-8 bg-white hover:bg-gray-200 rounded-full cursor-pointer text-black"
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ArrowUp className="w-4 h-4" />
+                    )}
+                  </Button>
+                </div>
               </form>
               
               <div className="mt-3 text-xs text-zinc-500 text-center">
