@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
             },
         })
 
+        console.log("prompt", prompt);
+        console.log("system prompt", systemPrompt);
 
         const response = await ollama.chat({
             model: "llama3.2:1b",
@@ -31,6 +33,8 @@ export async function POST(req: NextRequest) {
                 { role: "user", content: prompt }
             ]
         });
+
+        console.log("response", response);
 
         const aiResponse = await prisma.message.create({ // TODO: add video generation here
             data: {

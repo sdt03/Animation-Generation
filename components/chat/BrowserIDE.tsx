@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { 
@@ -22,171 +23,215 @@ interface BrowserIDEProps {
   shouldStreamOnMount?: boolean;
 }
 
+interface ProcessedCode {
+  cleaned: string;
+  language: string;
+}
+
+// Helper function to process code and extract language
+const processCode = (code: string): ProcessedCode => {
+  let cleaned = code;
+  let language = "";
+  const match = cleaned.match(/^```([a-zA-Z0-9_-]*)\n/);
+  if (match) {
+    language = match[1];
+    cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\n/, "");
+    cleaned = cleaned.replace(/```\s*$/, "");
+  } else {
+    // Remove just triple backticks if present
+    cleaned = cleaned.replace(/^```\n/, "");
+    cleaned = cleaned.replace(/```\s*$/, "");
+  }
+  return { cleaned, language };
+};
+
 export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: BrowserIDEProps) => {
   const [activeTab, setActiveTab] = useState<"code" | "preview">("code");
-  const [editableCode, setEditableCode] = useState(code);
   const [isRunning, setIsRunning] = useState(false);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [detectedLanguage, setDetectedLanguage] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamedCode, setStreamedCode] = useState("");
-  const streamingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [hasStreamed, setHasStreamed] = useState(false);
+  
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const streamingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Update editable code and language when prop changes
-  useEffect(() => {
-    // Remove markdown code fences if present and extract language
-    let cleaned = code;
-    let language = "";
-    const match = cleaned.match(/^```([a-zA-Z0-9_-]*)\n/);
-    if (match) {
-      language = match[1];
-      cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\n/, "");
-      cleaned = cleaned.replace(/```\s*$/, "");
-    } else {
-      // Remove just triple backticks if present
-      cleaned = cleaned.replace(/^```\n/, "");
-      cleaned = cleaned.replace(/```\s*$/, "");
-    }
-    setEditableCode(cleaned);
-    setDetectedLanguage(language);
-    // Only stream if shouldStreamOnMount is true and hasn't streamed yet
-    if (shouldStreamOnMount && !hasStreamed) {
-      setIsStreaming(true);
-      setStreamedCode("");
-      if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current);
-      let i = 0;
-      function streamNext() {
-        setStreamedCode(cleaned.slice(0, i + 1));
-        if (i < cleaned.length - 1) {
-          i++;
-          streamingTimeoutRef.current = setTimeout(streamNext, 8 + Math.random() * 30);
+  const processedCode = processCode(code);
+
+  // Mutation for updating the editable code
+  const updateCodeMutation = useMutation({
+    mutationFn: async (newCode: string) => {
+      onCodeChange(newCode);
+      return newCode;
+    },
+  });
+
+  // Handle streaming with query
+  const { data: streamingData } = useQuery({
+    queryKey: ['streaming', processedCode.cleaned, shouldStreamOnMount, hasStreamed],
+    queryFn: async () => {
+      if (!processedCode.cleaned || !shouldStreamOnMount || hasStreamed) {
+        setStreamedCode(processedCode.cleaned);
+        setIsStreaming(false);
+        setHasStreamed(true);
+        return { complete: true };
+      }
+
+      return new Promise<{ complete: boolean }>((resolve) => {
+        setIsStreaming(true);
+        setStreamedCode("");
+        
+        if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current);
+        
+        let i = 0;
+        const cleanedCode = processedCode.cleaned;
+        
+        function streamNext() {
+          setStreamedCode(cleanedCode.slice(0, i + 1));
+          
+          if (i < cleanedCode.length - 1) {
+            i++;
+            streamingTimeoutRef.current = setTimeout(streamNext, 8 + Math.random() * 30);
+          } else {
+            setIsStreaming(false);
+            setHasStreamed(true);
+            resolve({ complete: true });
+          }
+        }
+        
+        if (cleanedCode.length > 0) {
+          streamNext();
         } else {
           setIsStreaming(false);
           setHasStreamed(true);
+          resolve({ complete: true });
+        }
+      });
+    },
+    enabled: !!processedCode.cleaned,
+    staleTime: Infinity,
+  });
+
+  // Mutation for running code in preview
+  const runCodeMutation = useMutation({
+    mutationFn: async (codeToRun: string) => {
+      if (!codeToRun.trim()) return;
+
+      setIsRunning(true);
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Preview</title>
+          <style>
+            body {
+              margin: 0;
+              padding: 20px;
+              font-family: system-ui, -apple-system, sans-serif;
+              background: #1a1a1a;
+              color: white;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              width: 100%;
+              max-width: 800px;
+              text-align: center;
+            }
+            .error {
+              color: #ef4444;
+              background: rgba(239, 68, 68, 0.1);
+              border: 1px solid rgba(239, 68, 68, 0.3);
+              padding: 16px;
+              border-radius: 8px;
+              margin: 20px 0;
+            }
+          </style>
+           <script src="https://cdn.example.com/manim.js"></script>
+        </head>
+        <body>
+          <div class="container">
+            <script>
+              try {
+                ${codeToRun}
+              } catch (error) {
+                document.body.innerHTML = '<div class="error"><h3>Error:</h3><p>' + error.message + '</p></div>';
+                console.error('Execution error:', error);
+              }
+            </script>
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Write to iframe
+      if (iframeRef.current) {
+        const doc = iframeRef.current.contentDocument;
+        if (doc) {
+          doc.open();
+          doc.write(htmlContent);
+          doc.close();
         }
       }
-      if (cleaned.length > 0) {
-        streamNext();
-      } else {
-        setIsStreaming(false);
-        setHasStreamed(true);
+
+      // Simulate execution time
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setIsRunning(false);
+    },
+  });
+
+  // Auto-run preview when switching to preview tab or when code changes
+  const { data: previewData } = useQuery({
+    queryKey: ['preview', activeTab, processedCode.cleaned],
+    queryFn: () => {
+      if (activeTab === "preview" && processedCode.cleaned) {
+        runCodeMutation.mutate(processedCode.cleaned);
       }
-    } else {
-      // No streaming, just set code instantly
-      setStreamedCode(cleaned);
-      setIsStreaming(false);
-      setHasStreamed(true);
-    }
-    // Cleanup on unmount
-    return () => {
-      if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current);
-    };
-  }, [code, shouldStreamOnMount]);
+      return null;
+    },
+    enabled: activeTab === "preview" && !!processedCode.cleaned,
+    staleTime: 1000, // Re-run after 1 second
+  });
 
-  // Auto-run preview when code changes
-  useEffect(() => {
-    if (activeTab === "preview" && editableCode) {
-      runCode();
-    }
-  }, [editableCode, activeTab]);
+  // Use streamedCode for display if streaming, else processedCode
+  const displayCode = isStreaming ? streamedCode : processedCode.cleaned;
+  const detectedLanguage = processedCode.language;
 
-  const runCode = () => {
-    if (!editableCode.trim()) return;
-
-    setIsRunning(true);
-    
-    // Create HTML document with the code
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Preview</title>
-        <style>
-          body {
-            margin: 0;
-            padding: 20px;
-            font-family: system-ui, -apple-system, sans-serif;
-            background: #1a1a1a;
-            color: white;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-          .container {
-            width: 100%;
-            max-width: 800px;
-            text-align: center;
-          }
-          .error {
-            color: #ef4444;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            padding: 16px;
-            border-radius: 8px;
-            margin: 20px 0;
-          }
-        </style>
-         <script src="https://cdn.example.com/manim.js"></script>
-      </head>
-      <body>
-        <div class="container">
-          <script>
-            try {
-              ${editableCode}
-            } catch (error) {
-              document.body.innerHTML = '<div class="error"><h3>Error:</h3><p>' + error.message + '</p></div>';
-              console.error('Execution error:', error);
-            }
-          </script>
-        </div>
-      </body>
-      </html>
-    `;
-
-    // Write to iframe
-    if (iframeRef.current) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(htmlContent);
-        doc.close();
-      }
-    }
-
-    setTimeout(() => setIsRunning(false), 500);
-  };
-
-  const copyCode = async () => {
+  const copyCode = useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(editableCode);
+      const codeToCopy = displayCode || "";
+      await navigator.clipboard.writeText(codeToCopy);
     } catch (err) {
       console.error("Failed to copy code:", err);
     }
-  };
+  }, [displayCode]);
 
-  const downloadCode = () => {
-    const blob = new Blob([editableCode], { type: "text/javascript" });
+  const downloadCode = useCallback(() => {
+    const codeToDownload = displayCode || "";
+    const blob = new Blob([codeToDownload], { type: "text/x-python" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "generated-code.js";
+    a.download = "generated-code.py";
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  };
+  }, [displayCode]);
 
-  const handleCodeChange = (newCode: string) => {
-    setEditableCode(newCode);
-    onCodeChange(newCode);
-  };
+  const handleCodeChange = useCallback((newCode: string) => {
+    updateCodeMutation.mutate(newCode);
+  }, [updateCodeMutation]);
 
-  // Use streamedCode for display if streaming, else editableCode
-  const displayCode = isStreaming ? streamedCode : editableCode;
+  const runCode = useCallback(() => {
+    if (processedCode.cleaned) {
+      runCodeMutation.mutate(processedCode.cleaned);
+    }
+  }, [processedCode.cleaned, runCodeMutation]);
 
   return (
     <>
@@ -378,7 +423,7 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
             </div>
           ) : (
             <div className="h-full flex flex-col">
-              {editableCode ? (
+              {displayCode ? (
                 <div className="flex-1 bg-zinc-800 rounded-lg m-2">
                   <iframe
                     ref={iframeRef}
@@ -408,9 +453,9 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
             <span>
               {activeTab === "code" ? "Code Editor" : "Live Preview"}
             </span>
-            {editableCode && (
+            {displayCode && (
               <span>
-                {editableCode.split('\n').length} lines, {editableCode.length} characters
+                {displayCode.split('\n').length} lines, {displayCode.length} characters
               </span>
             )}
           </div>
