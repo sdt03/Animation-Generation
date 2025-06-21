@@ -5,7 +5,7 @@ import ollama from "ollama";
 import prisma  from "@/db";
 
 async function generateVideo(code: string, conversationId: string) {
-    const video = await axios.post("/run-manim", {
+    const video = await axios.post("http://localhost:8000/run-manim", {
         code: code,
         conversationId: conversationId
     });
