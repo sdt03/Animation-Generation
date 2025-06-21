@@ -4,6 +4,14 @@ import { NextRequest, NextResponse } from "next/server";
 import ollama from "ollama";
 import prisma  from "@/db";
 
+async function generateVideo(code: string, conversationId: string) {
+    const video = await axios.post("/run-manim", {
+        code: code,
+        conversationId: conversationId
+    });
+    return video;
+}
+
 
 export async function POST(req: NextRequest) {
     const { conversationId, prompt } = await req.json();
@@ -36,7 +44,7 @@ export async function POST(req: NextRequest) {
 
         console.log("response", response);
 
-        const aiResponse = await prisma.message.create({ // TODO: add video generation here
+        await prisma.message.create({ // TODO: add video generation here
             data: {
                 content: response.message.content,
                 sender: "llm",
@@ -70,7 +78,22 @@ export async function POST(req: NextRequest) {
 
         console.log(response.message.content);
 
-        return NextResponse.json({ message: response.message.content }, { status: 200 });
+        const userResponse =  NextResponse.json({ message: response.message.content }, { status: 200 });
+        const video = await generateVideo(response.message.content, conversationId);
+
+        await prisma.video.create({
+            data: {
+                thumbnailUrl: video.data.thumbnailUrl,
+                message: {
+                    connect: {
+                        id: message.id
+                    }
+                }
+            }
+        });
+
+        return NextResponse.json({ message: response.message.content, video: video.data.thumbnailUrl }, { status: 200 });
+       
     } catch (error) {
         console.error('Error in chat API:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
