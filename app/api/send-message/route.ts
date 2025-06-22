@@ -1,10 +1,16 @@
 import { systemPrompt } from "@/lib/prompts/systemprompt";
+import { getCleanCode } from "@/lib/utils";
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 import ollama from "ollama";
 import prisma  from "@/db";
 
 async function generateVideo(code: string, conversationId: string) {
+    console.log("🎬 Sending clean code to sandbox:");
+    console.log("=".repeat(50));
+    console.log(code);
+    console.log("=".repeat(50));
+    
     const video = await axios.post("http://localhost:8000/run-manim", {
         code: code,
         conversationId: conversationId
@@ -31,8 +37,8 @@ export async function POST(req: NextRequest) {
             },
         })
 
-        console.log("prompt", prompt);
-        console.log("system prompt", systemPrompt);
+        console.log("📤 User prompt:", prompt);
+        console.log("🤖 System prompt:", systemPrompt);
 
         const response = await ollama.chat({
             model: "llama3.2:1b",
@@ -42,9 +48,9 @@ export async function POST(req: NextRequest) {
             ]
         });
 
-        console.log("response", response);
+        console.log("🤖 LLM response:", response);
 
-        await prisma.message.create({ // TODO: add video generation here
+        await prisma.message.create({
             data: {
                 content: response.message.content,
                 sender: "llm",
@@ -73,13 +79,17 @@ export async function POST(req: NextRequest) {
             }
         })
 
-        console.log("system prompt", systemPrompt);
-        console.log("prompt", prompt);
+        console.log("📝 Full LLM response:", response.message.content);
 
-        console.log(response.message.content);
+        // Extract clean code from the LLM response
+        const cleanCode = getCleanCode(response.message.content);
+        console.log("🔍 Extracted clean code:");
+        console.log("=".repeat(40));
+        console.log(cleanCode);
+        console.log("=".repeat(40));
 
-        const userResponse =  NextResponse.json({ message: response.message.content }, { status: 200 });
-        const video = await generateVideo(response.message.content, conversationId);
+        // Generate video with clean code only
+        const video = await generateVideo(cleanCode, conversationId);
 
         await prisma.video.create({
             data: {
@@ -92,10 +102,14 @@ export async function POST(req: NextRequest) {
             }
         });
 
-        return NextResponse.json({ message: response.message.content, video: video.data.thumbnailUrl }, { status: 200 });
+        return NextResponse.json({ 
+            message: response.message.content, 
+            video: video.data.thumbnailUrl,
+            cleanCode: cleanCode // Optional: include clean code in response for debugging
+        }, { status: 200 });
        
     } catch (error) {
-        console.error('Error in chat API:', error);
+        console.error('❌ Error in chat API:', error);
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }

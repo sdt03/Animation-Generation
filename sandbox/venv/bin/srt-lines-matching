@@ -1,4 +1,4 @@
-#!/Users/shoumikdaterao/Developer/animation-generation/sandbox/venv/bin/python3.12
+#!/Users/shoumikdaterao/Developer/animation-generation/sandbox/venv/bin/python3.11
 
 """Filter subtitles that match or don't match a particular pattern."""
 

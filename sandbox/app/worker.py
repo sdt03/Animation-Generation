@@ -16,106 +16,9 @@ from io import StringIO
 
 class CodeExecutor:
     def __init__(self, output_dir: str = None):
-        self.installed_packages = set()
         self.output_dir = output_dir or os.path.join(os.path.dirname(__file__), "output")
         os.makedirs(self.output_dir, exist_ok=True)
         
-    def extract_imports(self, code: str) -> List[str]:
-        """Extract all import statements from the code"""
-        imports = []
-        try:
-            tree = ast.parse(code)
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        imports.append(alias.name.split('.')[0])
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module:
-                        imports.append(node.module.split('.')[0])
-        except SyntaxError:
-            # If AST parsing fails, use regex as fallback
-            import_pattern = r'(?:from\s+(\w+)|import\s+(\w+))'
-            matches = re.findall(import_pattern, code)
-            for match in matches:
-                imports.extend([m for m in match if m])
-        
-        return list(set(imports))
-    
-    def extract_requirements_from_comments(self, code: str) -> List[str]:
-        """Extract requirements from comments like # pip install package"""
-        requirements = []
-        lines = code.split('\n')
-        
-        for line in lines:
-            line = line.strip()
-            # Look for pip install commands in comments
-            if line.startswith('#') and 'pip install' in line:
-                # Extract package names after pip install
-                parts = line.split('pip install', 1)
-                if len(parts) > 1:
-                    packages = parts[1].strip().split()
-                    requirements.extend(packages)
-            # Look for requirements in comments like # requirements: package1, package2
-            elif line.startswith('#') and 'requirements:' in line:
-                parts = line.split('requirements:', 1)
-                if len(parts) > 1:
-                    packages = [pkg.strip() for pkg in parts[1].split(',')]
-                    requirements.extend(packages)
-        
-        return requirements
-    
-    def map_import_to_package(self, import_name: str) -> str:
-        """Map import names to actual package names"""
-        # Common mappings where import name differs from package name
-        import_to_package = {
-            'cv2': 'opencv-python',
-            'PIL': 'Pillow',
-            'sklearn': 'scikit-learn',
-            'yaml': 'PyYAML',
-            'bs4': 'beautifulsoup4',
-            'requests': 'requests',
-            'numpy': 'numpy',
-            'pandas': 'pandas',
-            'matplotlib': 'matplotlib',
-            'seaborn': 'seaborn',
-            'scipy': 'scipy',
-            'plotly': 'plotly',
-            'dash': 'dash',
-            'flask': 'Flask',
-            'django': 'Django',
-            'fastapi': 'fastapi',
-            'uvicorn': 'uvicorn',
-            'sqlalchemy': 'SQLAlchemy',
-            'psycopg2': 'psycopg2-binary',
-            'pymongo': 'pymongo',
-            'redis': 'redis',
-            'celery': 'celery',
-            'jwt': 'PyJWT',
-            'dateutil': 'python-dateutil',
-            'dotenv': 'python-dotenv',
-            'tqdm': 'tqdm',
-            'rich': 'rich',
-            'click': 'click',
-            'typer': 'typer',
-            'pydantic': 'pydantic',
-            'httpx': 'httpx',
-            'aiohttp': 'aiohttp',
-            'websockets': 'websockets',
-            'streamlit': 'streamlit',
-            'gradio': 'gradio',
-            'transformers': 'transformers',
-            'torch': 'torch',
-            'tensorflow': 'tensorflow',
-            'keras': 'keras',
-            'gym': 'gymnasium',
-            'stable_baselines3': 'stable-baselines3',
-            'manim': 'manim',
-            # Note: Manim has system dependency issues on some systems
-            # We'll skip auto-installation and provide helpful error messages
-        }
-        
-        return import_to_package.get(import_name, import_name)
-    
     def setup_manim_working_directory(self, temp_dir: str) -> str:
         """Setup proper working directory for Manim with config"""
         # Create media directory structure that Manim expects
@@ -123,12 +26,15 @@ class CodeExecutor:
         videos_dir = os.path.join(media_dir, "videos")
         os.makedirs(videos_dir, exist_ok=True)
         
-        # Create a simple manim config file
+        # Create a manim config file with 720p quality
         config_content = f"""
 [CLI]
 media_dir = {media_dir}
 video_dir = {videos_dir}
-quality = medium_quality
+quality = high_quality
+pixel_height = 720
+pixel_width = 1280
+frame_rate = 30
 """
         config_path = os.path.join(temp_dir, "manim.cfg")
         with open(config_path, "w") as f:
@@ -154,7 +60,7 @@ quality = medium_quality
                         break
             
             if scene_class_name:
-                # Add rendering code
+                # Add rendering code with specific quality settings
                 render_code = f"""
 # Render the scene
 if __name__ == "__main__":
@@ -195,90 +101,6 @@ if __name__ == "__main__":
             
         return copied_files
     
-    def install_package(self, package: str) -> bool:
-        """Install a single package using pip"""
-        if package in self.installed_packages:
-            return True
-            
-        try:
-            # Skip built-in modules
-            builtin_modules = {
-                'os', 'sys', 'json', 'time', 'datetime', 'random', 'math', 
-                'collections', 'itertools', 'functools', 'operator', 'typing',
-                'pathlib', 'urllib', 'http', 'email', 'html', 'xml', 'csv',
-                'sqlite3', 'pickle', 'base64', 'hashlib', 'hmac', 'secrets',
-                'uuid', 'decimal', 'fractions', 'statistics', 'enum', 'dataclasses',
-                'contextlib', 'copy', 'pprint', 'reprlib', 'weakref', 'gc',
-                'inspect', 'dis', 'ast', 'importlib', 'pkgutil', 'modulefinder',
-                'runpy', 'site', 'sysconfig', 'platform', 'errno', 'io', 'codecs',
-                'locale', 'gettext', 'argparse', 'optparse', 'logging', 'getpass',
-                'curses', 'shutil', 'glob', 'fnmatch', 'linecache', 'tempfile',
-                'gzip', 'bz2', 'lzma', 'zipfile', 'tarfile', 'configparser',
-                'netrc', 'xdrlib', 'plistlib', 'calendar', 'zoneinfo', 'threading',
-                'multiprocessing', 'concurrent', 'subprocess', 'sched', 'queue',
-                'select', 'selectors', 'asyncio', 'socket', 'ssl', 'signal',
-                'mmap', 'array', 'struct', 'ctypes', 'unicodedata', 'stringprep',
-                'readline', 'rlcompleter', 'cmd', 'shlex', 'tkinter', 'turtle',
-                'pydoc', 'doctest', 'unittest', 'test', 'lib2to3', 'venv',
-                'ensurepip', 'zipapp', 'trace', 'tabnanny', 'compileall', 'py_compile',
-                'pyclbr', 'tokenize', 'keyword', 'symbol', 'token', 'parser'
-            }
-            
-            if package in builtin_modules:
-                self.installed_packages.add(package)
-                return True
-            
-            print(f"Installing package: {package}")
-            result = subprocess.run(
-                [sys.executable, '-m', 'pip', 'install', package],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            if result.returncode == 0:
-                self.installed_packages.add(package)
-                print(f"Successfully installed: {package}")
-                return True
-            else:
-                print(f"Failed to install {package}: {result.stderr}")
-                return False
-                
-        except subprocess.TimeoutExpired:
-            print(f"Timeout while installing {package}")
-            return False
-        except Exception as e:
-            print(f"Error installing {package}: {str(e)}")
-            return False
-    
-    def install_requirements(self, code: str) -> Tuple[List[str], List[str]]:
-        """Install all required packages for the code"""
-        # Extract imports and requirements
-        imports = self.extract_imports(code)
-        comment_requirements = self.extract_requirements_from_comments(code)
-        
-        all_requirements = imports + comment_requirements
-        
-        # Map imports to actual package names
-        packages_to_install = []
-        for req in all_requirements:
-            package_name = self.map_import_to_package(req)
-            packages_to_install.append(package_name)
-        
-        # Remove duplicates while preserving order
-        packages_to_install = list(dict.fromkeys(packages_to_install))
-        
-        successful_installs = []
-        failed_installs = []
-        
-        for package in packages_to_install:
-            if self.install_package(package):
-                successful_installs.append(package)
-            else:
-                failed_installs.append(package)
-        
-        return successful_installs, failed_installs
-    
     def execute_code(self, code: str, timeout: int = 30, is_manim: bool = False) -> Dict[str, Any]:
         """Execute the code and return results"""
         # Create string buffers to capture output
@@ -290,8 +112,8 @@ if __name__ == "__main__":
             'output': '',
             'error': '',
             'execution_time': 0,
-            'installed_packages': [],
-            'failed_packages': [],
+            'installed_packages': [],  # Empty since we skip installation
+            'failed_packages': [],     # Empty since we skip installation
             'generated_files': []
         }
         
@@ -301,15 +123,8 @@ if __name__ == "__main__":
                 import time
                 start_time = time.time()
                 
-                # Install requirements
-                print("Installing requirements...")
-                successful_installs, failed_installs = self.install_requirements(code)
-                result['installed_packages'] = successful_installs
-                result['failed_packages'] = failed_installs
-                
-                if failed_installs:
-                    result['error'] = f"Failed to install packages: {', '.join(failed_installs)}"
-                    return result
+                # Skip package installation - assume libraries are pre-installed
+                print("Skipping package installation - using pre-installed libraries")
                 
                 # Setup working directory for Manim if needed
                 if is_manim:
@@ -384,7 +199,7 @@ if __name__ == "__main__":
 
 def execute_code_with_requirements(code: str, timeout: int = 30, is_manim: bool = False) -> Dict[str, Any]:
     """
-    Main function to execute code with automatic requirement installation
+    Main function to execute code (without automatic requirement installation)
     
     Args:
         code (str): The Python code to execute
@@ -397,8 +212,8 @@ def execute_code_with_requirements(code: str, timeout: int = 30, is_manim: bool 
         - output (str): Standard output from the code
         - error (str): Any error messages
         - execution_time (float): Time taken to execute
-        - installed_packages (list): Successfully installed packages
-        - failed_packages (list): Packages that failed to install
+        - installed_packages (list): Empty since we skip installation
+        - failed_packages (list): Empty since we skip installation
         - generated_files (list): List of generated file names (for Manim)
     """
     executor = CodeExecutor()
@@ -407,27 +222,16 @@ def execute_code_with_requirements(code: str, timeout: int = 30, is_manim: bool 
 
 # Example usage and testing
 if __name__ == "__main__":
-    # Test code with various requirements
+    # Test code for basic functionality
     test_code = """
-# pip install requests beautifulsoup4
-import requests
-from bs4 import BeautifulSoup
 import json
+import math
 
 # Simple example
 print("Hello, World!")
-print("Testing code execution with requirements")
-
-# Test with installed packages
-try:
-    response = requests.get("https://httpbin.org/json")
-    data = response.json()
-    print(f"API Response: {data}")
-except Exception as e:
-    print(f"Error with requests: {e}")
+print("Testing code execution without package installation")
 
 # Test with math operations
-import math
 result = math.sqrt(16)
 print(f"Square root of 16: {result}")
 
@@ -441,8 +245,6 @@ print(f"Data: {json.dumps(data, indent=2)}")
     
     print(f"Success: {result['success']}")
     print(f"Execution time: {result['execution_time']:.2f} seconds")
-    print(f"Installed packages: {result['installed_packages']}")
-    print(f"Failed packages: {result['failed_packages']}")
     print(f"Output:\n{result['output']}")
     if result['error']:
         print(f"Errors:\n{result['error']}")
