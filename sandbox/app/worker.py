@@ -77,11 +77,21 @@ if __name__ == "__main__":
         video_extensions = ['*.mp4', '*.mov', '*.avi', '*.gif']
         generated_files = []
         
-        for ext in video_extensions:
-            files = glob.glob(os.path.join(temp_dir, "**", ext), recursive=True)
-            generated_files.extend(files)
+        # Look in common Manim output directories
+        search_paths = [
+            temp_dir,  # Root temp directory
+            os.path.join(temp_dir, "media"),  # Manim media directory
+            os.path.join(temp_dir, "media", "videos"),  # Manim videos directory
+        ]
         
-        return generated_files
+        for search_path in search_paths:
+            if os.path.exists(search_path):
+                for ext in video_extensions:
+                    files = glob.glob(os.path.join(search_path, "**", ext), recursive=True)
+                    generated_files.extend(files)
+                    
+        # Remove duplicates and return
+        return list(set(generated_files))
     
     def copy_generated_files(self, files: List[str], temp_dir: str) -> List[str]:
         """Copy generated files to output directory and return their paths"""
@@ -156,11 +166,21 @@ if __name__ == "__main__":
                     
                     # Find and copy generated files
                     if is_manim:
+                        # Debug: List all files in temp directory
+                        print(f"🔍 Searching for files in: {temp_dir}")
+                        for root, dirs, files in os.walk(temp_dir):
+                            if files:
+                                print(f"📁 {root}: {files}")
+                        
                         generated_files = self.find_generated_files(temp_dir)
+                        print(f"🎥 Found generated files: {generated_files}")
+                        
                         if generated_files:
                             copied_files = self.copy_generated_files(generated_files, temp_dir)
                             result['generated_files'] = copied_files
-                            print(f"Found and copied {len(copied_files)} generated files")
+                            print(f"✅ Found and copied {len(copied_files)} generated files: {copied_files}")
+                        else:
+                            print("❌ No generated files found")
                     
                     result['success'] = True
                     result['output'] = stdout_content
