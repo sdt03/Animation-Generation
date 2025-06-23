@@ -16,34 +16,13 @@ import {
 } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { extractCode, type CodeExtractionResult } from "@/lib/utils";
 
 interface BrowserIDEProps {
   code: string;
   onCodeChange: (code: string) => void;
   shouldStreamOnMount?: boolean;
 }
-
-interface ProcessedCode {
-  cleaned: string;
-  language: string;
-}
-
-// Helper function to process code and extract language
-const processCode = (code: string): ProcessedCode => {
-  let cleaned = code;
-  let language = "";
-  const match = cleaned.match(/^```([a-zA-Z0-9_-]*)\n/);
-  if (match) {
-    language = match[1];
-    cleaned = cleaned.replace(/^```[a-zA-Z0-9_-]*\n/, "");
-    cleaned = cleaned.replace(/```\s*$/, "");
-  } else {
-    // Remove just triple backticks if present
-    cleaned = cleaned.replace(/^```\n/, "");
-    cleaned = cleaned.replace(/```\s*$/, "");
-  }
-  return { cleaned, language };
-};
 
 export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: BrowserIDEProps) => {
   const [activeTab, setActiveTab] = useState<"code" | "preview">("code");
@@ -55,7 +34,7 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const streamingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const processedCode = processCode(code);
+  const processedCode: CodeExtractionResult = extractCode(code);
 
   // Mutation for updating the editable code
   const updateCodeMutation = useMutation({
@@ -67,10 +46,10 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
 
   // Handle streaming with query
   const { data: streamingData } = useQuery({
-    queryKey: ['streaming', processedCode.cleaned, shouldStreamOnMount, hasStreamed],
+    queryKey: ['streaming', processedCode.code, shouldStreamOnMount, hasStreamed],
     queryFn: async () => {
-      if (!processedCode.cleaned || !shouldStreamOnMount || hasStreamed) {
-        setStreamedCode(processedCode.cleaned);
+      if (!processedCode.code || !shouldStreamOnMount || hasStreamed) {
+        setStreamedCode(processedCode.code);
         setIsStreaming(false);
         setHasStreamed(true);
         return { complete: true };
@@ -83,7 +62,7 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
         if (streamingTimeoutRef.current) clearTimeout(streamingTimeoutRef.current);
         
         let i = 0;
-        const cleanedCode = processedCode.cleaned;
+        const cleanedCode = processedCode.code;
         
         function streamNext() {
           setStreamedCode(cleanedCode.slice(0, i + 1));
@@ -107,7 +86,7 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
         }
       });
     },
-    enabled: !!processedCode.cleaned,
+    enabled: !!processedCode.code,
     staleTime: Infinity,
   });
 
@@ -186,19 +165,19 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
 
   // Auto-run preview when switching to preview tab or when code changes
   const { data: previewData } = useQuery({
-    queryKey: ['preview', activeTab, processedCode.cleaned],
+    queryKey: ['preview', activeTab, processedCode.code],
     queryFn: () => {
-      if (activeTab === "preview" && processedCode.cleaned) {
-        runCodeMutation.mutate(processedCode.cleaned);
+      if (activeTab === "preview" && processedCode.code) {
+        runCodeMutation.mutate(processedCode.code);
       }
       return null;
     },
-    enabled: activeTab === "preview" && !!processedCode.cleaned,
+    enabled: activeTab === "preview" && !!processedCode.code,
     staleTime: 1000, // Re-run after 1 second
   });
 
   // Use streamedCode for display if streaming, else processedCode
-  const displayCode = isStreaming ? streamedCode : processedCode.cleaned;
+  const displayCode = isStreaming ? streamedCode : processedCode.code;
   const detectedLanguage = processedCode.language;
 
   const copyCode = useCallback(async () => {
@@ -228,10 +207,10 @@ export const BrowserIDE = ({ code, onCodeChange, shouldStreamOnMount = false }: 
   }, [updateCodeMutation]);
 
   const runCode = useCallback(() => {
-    if (processedCode.cleaned) {
-      runCodeMutation.mutate(processedCode.cleaned);
+    if (processedCode.code) {
+      runCodeMutation.mutate(processedCode.code);
     }
-  }, [processedCode.cleaned, runCodeMutation]);
+  }, [processedCode.code, runCodeMutation]);
 
   return (
     <>
