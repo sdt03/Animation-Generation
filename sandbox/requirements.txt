@@ -28,8 +28,6 @@ pydub==0.25.1
 pyglet==2.1.6
 pyglm==2.8.2
 Pygments==2.19.2
-pyobjc-core==11.1
-pyobjc-framework-Cocoa==11.1
 rich==14.0.0
 scipy==1.15.3
 screeninfo==0.8.1
