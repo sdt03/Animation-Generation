@@ -1,3 +1,5 @@
+name: Deploy to EC2
+
 on:
   push:
     branches:
@@ -14,21 +16,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+        
       - name: Deploy to EC2
         env:
           PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
           
-          # Copy code to EC2
-          scp -i private_key -r . ubuntu@56.228.36.207:~/app/
+          # Copy code to EC2 (skip host key verification)
+          scp -i private_key -o StrictHostKeyChecking=no -r . ubuntu@56.228.36.207:~/app/
           
           # SSH and run deployment commands
-          ssh -i private_key ubuntu@56.228.36.207 << 'EOF'
-            cd ~/app/animation-generation/sandbox/app
+          ssh -i private_key -o StrictHostKeyChecking=no ubuntu@56.228.36.207 << 'EOF'
+            cd ~/app/animation-generation/sandbox
             python3 -m venv venv
             source venv/bin/activate
             pip install -r requirements.txt
-            python main.py
+            cd app
+            nohup python main.py > app.log 2>&1 &
+            echo "Deployment completed successfully!"
           EOF
+          
+          # Cleanup
+          rm -f private_key
