@@ -36,6 +36,7 @@ Pygments==2.19.2
 pyobjc-core==11.1
 pyobjc-framework-Cocoa==11.1
 python-dateutil==2.9.0.post0
+python-dotenv==1.0.0
 requests==2.32.4
 rich==14.0.0
 s3transfer==0.13.0
