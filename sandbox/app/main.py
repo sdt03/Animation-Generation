@@ -6,9 +6,11 @@ import uvicorn
 from worker import execute_code_with_requirements
 import logging
 import os
-import json
 import boto3
+from dotenv import load_dotenv
 from botocore.exceptions import ClientError
+
+load_dotenv()
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -22,15 +24,24 @@ AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = os.getenv("AWS_REGION")
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 
+print(S3_BUCKET_NAME)
 # Initialize S3 client
 try:
-    s3_client = boto3.client(
-        's3',
-        aws_access_key_id=AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        region_name=AWS_REGION
-    )
+    if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=AWS_REGION
+        )
+    else:
+        s3_client = boto3.client(
+            's3',
+            region_name=AWS_REGION
+        )
+
     logger.info("Successfully initialized S3 client")
+    logger.info(f"S3 client: {s3_client}")
 except Exception as e:
     logger.error(f"Failed to initialize S3 client: {str(e)}")
     s3_client = None
@@ -222,13 +233,21 @@ async def run_manim(request: CodeExecutionRequest):
         
         # Upload generated files to S3
         s3_upload_results = []
+        main_video_url = None
+        
         if result['success'] and result.get('generated_files'):
-            # Get full paths of generated files
+            # Get full paths of generated files (should be only one now)
             file_paths = [os.path.join(OUTPUT_DIR, filename) for filename in result['generated_files']]
             
             # Upload files to S3
-            logger.info(f"Uploading {len(file_paths)} files to S3...")
+            logger.info(f"Uploading {len(file_paths)} file(s) to S3...")
             s3_upload_results = upload_files_to_s3(file_paths)
+            
+            # Get the main video URL (should be only one)
+            successful_uploads = [upload for upload in s3_upload_results if upload['success']]
+            if successful_uploads:
+                main_video_url = successful_uploads[0]['url']
+                logger.info(f"Main video URL: {main_video_url}")
             
             # Clean up local files after successful upload
             for file_path in file_paths:
@@ -238,7 +257,7 @@ async def run_manim(request: CodeExecutionRequest):
                 except Exception as e:
                     logger.warning(f"Failed to clean up local file {file_path}: {str(e)}")
         
-        # Prepare response with S3 URLs
+        # Prepare response with single video URL
         response = {
             "success": result['success'],
             "output": result['output'],
@@ -248,8 +267,9 @@ async def run_manim(request: CodeExecutionRequest):
             "failed_packages": result['failed_packages'],
             "generated_files": result.get('generated_files', []),
             "s3_uploads": s3_upload_results,
-            "video_urls": [upload['url'] for upload in s3_upload_results if upload['success']],
-            "thumbnailUrl": next((upload['url'] for upload in s3_upload_results if upload['success']), None)
+            "video_url": main_video_url,  # Single video URL
+            "video_urls": [main_video_url] if main_video_url else [],  # Array with one URL for backward compatibility
+            "thumbnailUrl": main_video_url  # Use the same URL as thumbnail
         }
         
         logger.info("Manim execution and S3 upload completed")

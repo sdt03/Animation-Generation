@@ -16,11 +16,15 @@ async function generateVideo(code: string, conversationId: string) {
     console.log(code);
     console.log("=".repeat(50));
     
-    const video = await axios.post("http://localhost:8000/run-manim", {
+    const SANDBOX_URL = process.env.SANDBOX_URL || "http://localhost:8000";
+    const video = await axios.post(`${SANDBOX_URL}/run-manim`, {
         code: code,
         conversationId: conversationId
     });
-    return video;
+
+    // Format S3 URL if needed
+    const s3Url = video.data.video_urls?.[0] || video.data.thumbnailUrl;
+    return { ...video, data: { ...video.data, s3Url } };
 }
 
 
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
 
         await prisma.video.create({
             data: {
-                thumbnailUrl: video.data.thumbnailUrl,
+                thumbnailUrl: video.data.s3Url,
                 message: {
                     connect: {
                         id: message.id
@@ -119,9 +123,10 @@ export async function POST(req: NextRequest) {
             }
         });
 
+        console.log("🔍 Video URL:", video.data.s3Url);
         return NextResponse.json({ 
             message: response, 
-            video: video.data.thumbnailUrl,
+            video: video.data.s3Url,
             cleanCode: cleanCode // Optional: include clean code in response for debugging
         }, { status: 200 });
        

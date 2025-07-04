@@ -24,57 +24,115 @@ class CodeExecutor:
         # Create media directory structure that Manim expects
         media_dir = os.path.join(temp_dir, "media")
         videos_dir = os.path.join(media_dir, "videos")
-        os.makedirs(videos_dir, exist_ok=True)
+        images_dir = os.path.join(media_dir, "images")
+        temp_dir_media = os.path.join(media_dir, "temp")
         
-        # Create a manim config file with 720p quality
+        # Create all necessary directories
+        for directory in [videos_dir, images_dir, temp_dir_media]:
+            os.makedirs(directory, exist_ok=True)
+            print(f"📁 Created directory: {directory}")
+        
+        # Create a manim config file with comprehensive settings
         config_content = f"""
 [CLI]
 media_dir = {media_dir}
 video_dir = {videos_dir}
-quality = high_quality
+images_dir = {images_dir}
+temp_dir = {temp_dir_media}
+quality = medium_quality
+format = mp4
+save_last_frame = false
+write_to_movie = true
 pixel_height = 720
 pixel_width = 1280
 frame_rate = 30
+background_color = BLACK
+preview = false
+disable_caching = true
+save_sections = false
+write_all = false
 """
         config_path = os.path.join(temp_dir, "manim.cfg")
         with open(config_path, "w") as f:
             f.write(config_content)
+        print(f"✅ Created Manim config at: {config_path}")
         
         return temp_dir
     
     def execute_manim_code(self, code: str, temp_dir: str) -> tuple:
         """Execute Manim code and handle video generation"""
-        # Check if the code contains a Scene class
-        has_scene_class = "class " in code and "Scene)" in code
         scene_class_name = None
         
-        if has_scene_class:
-            # For Scene classes, we need to add rendering logic
-            lines = code.split('\n')
-            for line in lines:
-                if 'class ' in line and 'Scene)' in line:
-                    # Extract class name
-                    class_match = re.search(r'class\s+(\w+)', line)
-                    if class_match:
-                        scene_class_name = class_match.group(1)
-                        break
+        try:
+            # Parse the code into an AST
+            tree = ast.parse(code)
+            
+            # Look for Scene subclasses
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for base in node.bases:
+                        if isinstance(base, ast.Name) and base.id == 'Scene':
+                            scene_class_name = node.name
+                            break
             
             if scene_class_name:
-                # Add rendering code with specific quality settings
+                # Check if the construct method has sufficient content for video
+                # If not, we'll add a minimum wait time
                 render_code = f"""
 # Render the scene
 if __name__ == "__main__":
+    from manim import config
+    import os
+    
+    # Force video generation settings
+    config.media_dir = r"{os.path.join(temp_dir, 'media')}"
+    config.video_dir = r"{os.path.join(temp_dir, 'media', 'videos')}"
+    config.quality = "medium_quality"
+    config.format = "mp4"
+    config.save_last_frame = False  # Don't save PNG frames
+    config.write_to_movie = True    # Force video generation
+    config.disable_caching = True   # Disable caching to ensure fresh render
+    config.preview = False          # Don't open preview
+    
+    # Create the scene
     scene = {scene_class_name}()
+    
+    # Override construct to ensure minimum video duration
+    original_construct = scene.construct
+    def construct_with_video(self):
+        original_construct()
+        # Ensure minimum duration for video generation
+        if self.renderer.time < 1.0:  # If less than 1 second
+            print("Adding extra wait time to ensure video generation...")
+            self.wait(1)  # Add 1 second minimum
+    
+    # Replace the construct method
+    scene.construct = lambda: construct_with_video(scene)
+    
     scene.render()
     print(f"Scene {scene_class_name} rendered successfully!")
+    print(f"Video output directory: {{config.get_dir('video_dir')}}")
+    
+    # List all files in video directory
+    video_dir = config.get_dir('video_dir')
+    if os.path.exists(video_dir):
+        print(f"Files in video directory: {{os.listdir(video_dir)}}")
+        for root, dirs, files in os.walk(video_dir):
+            for file in files:
+                if file.endswith(('.mp4', '.mov', '.avi')):
+                    print(f"Generated video file: {{os.path.join(root, file)}}")
 """
                 code += render_code
-        
-        return code, scene_class_name
+                
+            return code, scene_class_name
+            
+        except SyntaxError as e:
+            print(f"Error parsing code: {e}")
+            return code, None
     
     def find_generated_files(self, temp_dir: str) -> List[str]:
         """Find generated video files in the temporary directory"""
-        video_extensions = ['*.mp4', '*.mov', '*.avi', '*.gif']
+        video_extensions = ['*.mp4', '*.mov', '*.avi', '*.gif']  # Removed PNG - only videos
         generated_files = []
         
         # Look in common Manim output directories
@@ -82,16 +140,63 @@ if __name__ == "__main__":
             temp_dir,  # Root temp directory
             os.path.join(temp_dir, "media"),  # Manim media directory
             os.path.join(temp_dir, "media", "videos"),  # Manim videos directory
+            os.path.join(temp_dir, "media", "videos", "1080p60"),  # High quality
+            os.path.join(temp_dir, "media", "videos", "720p30"),   # Medium quality
+            os.path.join(temp_dir, "media", "images"),  # Images directory
+            os.path.join(temp_dir, "media", "temp")     # Temporary files
         ]
         
         for search_path in search_paths:
             if os.path.exists(search_path):
+                print(f"🔍 Searching in: {search_path}")
                 for ext in video_extensions:
-                    files = glob.glob(os.path.join(search_path, "**", ext), recursive=True)
+                    pattern = os.path.join(search_path, "**", ext)
+                    files = glob.glob(pattern, recursive=True)
+                    if files:
+                        print(f"📁 Found {len(files)} files with extension {ext} in {search_path}")
+                        print(f"   Files: {files}")
                     generated_files.extend(files)
                     
         # Remove duplicates and return
-        return list(set(generated_files))
+        unique_files = list(set(generated_files))
+        print(f"🎥 Total unique files found: {len(unique_files)}")
+        return unique_files
+    
+    def select_main_video_file(self, files: List[str]) -> str:
+        """Select the main video file from a list of generated files"""
+        if not files:
+            return None
+            
+        # Filter only video files
+        video_files = [f for f in files if f.lower().endswith(('.mp4', '.mov', '.avi'))]
+        
+        if not video_files:
+            return None
+            
+        if len(video_files) == 1:
+            return video_files[0]
+            
+        # If multiple videos, prefer based on priority:
+        # 1. Files containing the scene name
+        # 2. Larger files (usually higher quality)
+        # 3. MP4 format over others
+        
+        # Sort by file size (descending) and prefer mp4
+        def video_priority(filepath):
+            filename = os.path.basename(filepath).lower()
+            size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+            
+            priority = 0
+            if filename.endswith('.mp4'):
+                priority += 1000
+            if size > 0:
+                priority += size
+                
+            return priority
+        
+        sorted_videos = sorted(video_files, key=video_priority, reverse=True)
+        print(f"🎯 Selected main video: {sorted_videos[0]} from {len(video_files)} videos")
+        return sorted_videos[0]
     
     def copy_generated_files(self, files: List[str], temp_dir: str) -> List[str]:
         """Copy generated files to output directory and return their paths"""
@@ -158,11 +263,27 @@ if __name__ == "__main__":
                     
                     # Execute the code with captured output
                     with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+                        print(f"🎬 Executing Manim code in directory: {temp_dir}")
+                        print(f"📂 Working directory files before execution: {os.listdir(temp_dir)}")
                         exec(code, exec_globals)
+                        print(f"📂 Working directory files after execution: {os.listdir(temp_dir)}")
+                        if os.path.exists(os.path.join(temp_dir, 'media')):
+                            print(f"📂 Media directory contents: {os.listdir(os.path.join(temp_dir, 'media'))}")
+                            videos_path = os.path.join(temp_dir, 'media', 'videos')
+                            if os.path.exists(videos_path):
+                                print(f"📂 Videos directory contents: {os.listdir(videos_path)}")
+                                for item in os.listdir(videos_path):
+                                    subdir_path = os.path.join(videos_path, item)
+                                    if os.path.isdir(subdir_path):
+                                        print(f"📂 {item} subdirectory contents: {os.listdir(subdir_path)}")
                     
                     # Get the output
                     stdout_content = stdout_buffer.getvalue()
                     stderr_content = stderr_buffer.getvalue()
+                    
+                    print(f"📤 Stdout: {stdout_content}")
+                    if stderr_content:
+                        print(f"⚠️  Stderr: {stderr_content}")
                     
                     # Find and copy generated files
                     if is_manim:
@@ -176,11 +297,18 @@ if __name__ == "__main__":
                         print(f"🎥 Found generated files: {generated_files}")
                         
                         if generated_files:
-                            copied_files = self.copy_generated_files(generated_files, temp_dir)
-                            result['generated_files'] = copied_files
-                            print(f"✅ Found and copied {len(copied_files)} generated files: {copied_files}")
+                            # Select only the main video file
+                            main_video = self.select_main_video_file(generated_files)
+                            if main_video:
+                                copied_files = self.copy_generated_files([main_video], temp_dir)
+                                result['generated_files'] = copied_files
+                                print(f"✅ Found and copied main video file: {copied_files}")
+                            else:
+                                print("❌ No suitable video file found")
+                                result['generated_files'] = []
                         else:
                             print("❌ No generated files found")
+                            result['generated_files'] = []
                     
                     result['success'] = True
                     result['output'] = stdout_content
