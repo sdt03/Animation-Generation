@@ -1,12 +1,16 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import uvicorn
 from worker import execute_code_with_requirements
 import logging
 import os
-import json
+import boto3
+from dotenv import load_dotenv
+from botocore.exceptions import ClientError
+
+load_dotenv()
 
 # Configure logging with more detailed format
 logging.basicConfig(
@@ -14,6 +18,99 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+
+print(S3_BUCKET_NAME)
+# Initialize S3 client
+try:
+    if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+        s3_client = boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=AWS_REGION
+        )
+    else:
+        s3_client = boto3.client(
+            's3',
+            region_name=AWS_REGION
+        )
+
+    logger.info("Successfully initialized S3 client")
+    logger.info(f"S3 client: {s3_client}")
+except Exception as e:
+    logger.error(f"Failed to initialize S3 client: {str(e)}")
+    s3_client = None
+
+def upload_file_to_s3(file_path: str, object_name: str = None) -> Dict[str, Any]:
+    """
+    Upload a file to an S3 bucket
+    
+    Args:
+        file_path (str): Path to the file to upload
+        object_name (str): S3 object name. If not specified, file_path is used
+    
+    Returns:
+        dict: Response containing upload status and file URL
+        {
+            'success': bool,
+            'url': str,
+            'error': str
+        }
+    """
+    # If S3 client initialization failed, return error
+    if s3_client is None:
+        return {
+            'success': False,
+            'url': None,
+            'error': 'S3 client not initialized'
+        }
+
+    # If object_name not specified, use file_path
+    if object_name is None:
+        object_name = os.path.basename(file_path)
+
+    try:
+        # Upload the file
+        s3_client.upload_file(file_path, S3_BUCKET_NAME, object_name)
+        
+        # Generate the URL for the uploaded file
+        url = f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/{object_name}"
+        
+        logger.info(f"Successfully uploaded file to S3: {url}")
+        return {
+            'success': True,
+            'url': url,
+            'error': None
+        }
+        
+    except ClientError as e:
+        logger.error(f"Failed to upload file to S3: {str(e)}")
+        return {
+            'success': False,
+            'url': None,
+            'error': str(e)
+        }
+
+def upload_files_to_s3(file_paths: List[str]) -> List[Dict[str, Any]]:
+    """
+    Upload multiple files to S3 bucket
+    
+    Args:
+        file_paths (List[str]): List of file paths to upload
+    
+    Returns:
+        List[Dict[str, Any]]: List of upload results for each file
+    """
+    results = []
+    for file_path in file_paths:
+        result = upload_file_to_s3(file_path)
+        results.append(result)
+    return results
 
 # Create output directory for generated files
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
@@ -104,7 +201,7 @@ async def execute_code(request: CodeExecutionRequest) -> CodeExecutionResponse:
 async def run_manim(request: CodeExecutionRequest):
     """
     Specialized endpoint for running Manim animations
-    This endpoint is specifically designed for animation generation
+    This endpoint is specifically designed for animation generation and uploads results to S3
     """
     try:
         logger.info("=" * 80)
@@ -134,7 +231,33 @@ async def run_manim(request: CodeExecutionRequest):
         logger.info("Starting Manim code execution...")
         result = execute_code_with_requirements(manim_code, request.timeout, is_manim=True)
         
-        # For manim, we want to return video file information
+        # Upload generated files to S3
+        s3_upload_results = []
+        main_video_url = None
+        
+        if result['success'] and result.get('generated_files'):
+            # Get full paths of generated files (should be only one now)
+            file_paths = [os.path.join(OUTPUT_DIR, filename) for filename in result['generated_files']]
+            
+            # Upload files to S3
+            logger.info(f"Uploading {len(file_paths)} file(s) to S3...")
+            s3_upload_results = upload_files_to_s3(file_paths)
+            
+            # Get the main video URL (should be only one)
+            successful_uploads = [upload for upload in s3_upload_results if upload['success']]
+            if successful_uploads:
+                main_video_url = successful_uploads[0]['url']
+                logger.info(f"Main video URL: {main_video_url}")
+            
+            # Clean up local files after successful upload
+            for file_path in file_paths:
+                try:
+                    os.remove(file_path)
+                    logger.info(f"Cleaned up local file: {file_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up local file {file_path}: {str(e)}")
+        
+        # Prepare response with single video URL
         response = {
             "success": result['success'],
             "output": result['output'],
@@ -143,19 +266,23 @@ async def run_manim(request: CodeExecutionRequest):
             "installed_packages": result['installed_packages'],
             "failed_packages": result['failed_packages'],
             "generated_files": result.get('generated_files', []),
-            "video_urls": [f"/output/{filename}" for filename in result.get('generated_files', [])],
-            "thumbnailUrl": f"/output/{result.get('generated_files', [None])[0]}" if result.get('generated_files') else None
+            "s3_uploads": s3_upload_results,
+            "video_url": main_video_url,  # Single video URL
+            "video_urls": [main_video_url] if main_video_url else [],  # Array with one URL for backward compatibility
+            "thumbnailUrl": main_video_url  # Use the same URL as thumbnail
         }
         
-        logger.info("Manim execution completed")
+        logger.info("Manim execution and S3 upload completed")
         logger.info(f"✅ Success: {result['success']}")
         logger.info(f"⏱️  Execution time: {result['execution_time']:.2f}s")
         logger.info(f"🎥 Generated files: {result.get('generated_files', [])}")
+        logger.info(f"☁️  S3 Upload results: {s3_upload_results}")
         
         print(f"\n🎯 MANIM EXECUTION RESULT:")
         print(f"✅ Success: {result['success']}")
         print(f"⏱️  Time: {result['execution_time']:.2f}s")
         print(f"🎥 Generated files: {result.get('generated_files', [])}")
+        print(f"☁️  S3 Upload results: {s3_upload_results}")
         print(f"📤 Output: {result['output'][:200]}..." if len(result['output']) > 200 else f"📤 Output: {result['output']}")
         if result['error']:
             print(f"❌ Error: {result['error'][:200]}..." if len(result['error']) > 200 else f"❌ Error: {result['error']}")
