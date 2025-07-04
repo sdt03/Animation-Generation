@@ -15,8 +15,11 @@ jobs:
     
     steps:
       - name: SSH into EC2
-        run: |
-          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} ubuntu@56.228.36.207
+        env: 
+            PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: | 
+            echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
+            ssh -i private_key ubuntu@56.228.36.207
 
       - name: Checkout code
         uses: actions/checkout@v3
