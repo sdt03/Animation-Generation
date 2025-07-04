@@ -4,46 +4,31 @@ on:
       - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    
-    environment: production 
-    
+    environment: production
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
     
     steps:
-      - name: SSH into EC2
-        env: 
-            PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: | 
-            echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
-            ssh -i private_key ubuntu@56.228.36.207
-
       - name: Checkout code
         uses: actions/checkout@v3
-        
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Change working directory to sandbox
-        run: cd animation-generation/sandbox
-        
-      - name: Create venv and install dependencies
-        working-directory: ./animation-generation/sandbox/app
-        run: |
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install -r requirements.txt
-          
-      - name: Run the app
-        run: |
-          source ../venv/bin/activate
-          python main.py
-        
       
+      - name: Deploy to EC2
+        env:
+          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
           
-      
+          # Copy code to EC2
+          scp -i private_key -r . ubuntu@56.228.36.207:~/app/
+          
+          # SSH and run deployment commands
+          ssh -i private_key ubuntu@56.228.36.207 << 'EOF'
+            cd ~/app/animation-generation/sandbox/app
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+            python main.py
+          EOF
