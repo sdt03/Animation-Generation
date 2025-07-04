@@ -14,6 +14,10 @@ jobs:
       S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
     
     steps:
+      - name: SSH into EC2
+        run: |
+          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} ubuntu@56.228.36.207
+
       - name: Checkout code
         uses: actions/checkout@v3
         
