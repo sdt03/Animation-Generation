@@ -23,7 +23,24 @@ jobs:
               ssh -i private_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
 
               # This runs ON EC2 — Python 3.11 must be installed there
-              python3.11 --version  
+              python3.11 --version
+
+              # Install Node.js if not already installed
+              if ! command -v node &> /dev/null; then
+                echo "Installing Node.js..."
+                curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                sudo apt-get install -y nodejs
+              else
+                echo "Node.js already installed: $(node --version)"
+              fi
+
+              # Install PM2 globally if not already installed
+              if ! command -v pm2 &> /dev/null; then
+                echo "Installing PM2..."
+                sudo npm install -g pm2
+              else
+                echo "PM2 already installed: $(pm2 --version)"
+              fi
 
               cd ~/desktop
 
@@ -41,20 +58,35 @@ jobs:
 
               source venv/bin/activate
 
-              pip install -r requirements.txt
-              
-              # Install PM2 globally (if not already installed)
-              sudo npm install -g pm2 || true
-              
+              # Check if requirements have changed or if this is first install
+              NEED_INSTALL=false
+              if [ ! -f "venv/.requirements_installed" ]; then
+                NEED_INSTALL=true
+              elif [ "requirements.txt" -nt "venv/.requirements_installed" ]; then
+                echo "Requirements file has been updated"
+                NEED_INSTALL=true
+              fi
+
+              if [ "$NEED_INSTALL" = true ]; then
+                echo "Installing/updating packages..."
+                pip install -r requirements.txt
+                touch venv/.requirements_installed
+              else
+                echo "All packages are up to date"
+              fi
+
               # Stop existing process if running
               pm2 stop animation-app || true
-              
+              pm2 delete animation-app || true
+
               # Start the application with PM2
               pm2 start app/main.py --name animation-app --interpreter python
-              
-              # Save PM2 configuration
+
+              # Save PM2 configuration to restart on reboot
               pm2 save
-              
+              pm2 startup || true
+
               echo "Application deployed and running with PM2"
+              pm2 status
 
               EOF
