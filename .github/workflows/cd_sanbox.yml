@@ -24,14 +24,15 @@ jobs:
 
       - name: Deploy to EC2
         run: |
-          cd desktop
-          if [ ! -d "animation-generation" ]; then
-            git clone https://github.com/sdt03/animation-generation.git 
-          fi
+          ls
+          # cd desktop
+          # if [ ! -d "animation-generation" ]; then
+          #   git clone https://github.com/sdt03/animation-generation.git 
+          # fi
 
-          cd animation-generation
-          git pull origin main
-          cd sandbox/app
-          source venv/bin/activate
-          pip install -r requirements.txt
-          python main.py
+          # cd animation-generation
+          # git pull origin main
+          # cd sandbox/app
+          # source venv/bin/activate
+          # pip install -r requirements.txt
+          # python main.py
