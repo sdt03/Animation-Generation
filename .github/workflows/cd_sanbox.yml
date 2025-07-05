@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deployment
 
 on:
   push:
@@ -6,36 +6,12 @@ on:
       - main
 
 jobs:
-  deploy:
+  build:
+    name: build
     runs-on: ubuntu-latest
-    environment: production
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
-    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        
-      - name: Deploy to EC2
-        env:
-          PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Remote SSH in EC2
         run: |
-          echo "$PRIVATE_KEY" > private_key && chmod 600 private_key
-          
-          # Copy code to EC2 (skip host key verification)
-          scp -i private_key -o StrictHostKeyChecking=no -r . ubuntu@56.228.36.207:~/app/
-          
-          # SSH and run deployment commands
-          ssh -i private_key -o StrictHostKeyChecking=no ubuntu@56.228.36.207 << 'EOF'
-            cd ~/app/animation-generation/sandbox
-            python3 -m venv venv
-            source venv/bin/activate
-            pip install -r requirements.txt
-            cd app
-            nohup python main.py > app.log 2>&1 &
-            echo "Deployment completed successfully!"
-          EOF
-          
-          # Cleanup
-          rm -f private_key
+          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
+          echo "Deploying to EC2 instance..."
+      
