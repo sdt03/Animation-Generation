@@ -12,6 +12,6 @@ jobs:
     steps:
       - name: Remote SSH in EC2
         run: |
-          ssh -i ${{ secrets.SSH_PRIVATE_KEY }} -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
+          ssh -i "${{ secrets.SSH_PRIVATE_KEY }}" -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
           echo "Deploying to EC2 instance..."
       
