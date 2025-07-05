@@ -20,8 +20,6 @@ jobs:
 
       - name: Remote SSH in EC2
         run: |
-          - name: Remote SSH in EC2
-            run: |
               ssh -i private_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
 
               # This runs ON EC2 — Python 3.11 must be installed there
