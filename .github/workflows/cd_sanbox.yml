@@ -23,7 +23,7 @@ jobs:
               ssh -i private_key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_IP }} << 'EOF'
 
               # This runs ON EC2 — Python 3.11 must be installed there
-              python3.11 --version
+              python3.11 --version  
 
               cd ~/desktop
 
@@ -42,6 +42,19 @@ jobs:
               source venv/bin/activate
 
               pip install -r requirements.txt
-              python app/main.py
+              
+              # Install PM2 globally (if not already installed)
+              sudo npm install -g pm2 || true
+              
+              # Stop existing process if running
+              pm2 stop animation-app || true
+              
+              # Start the application with PM2
+              pm2 start app/main.py --name animation-app --interpreter python
+              
+              # Save PM2 configuration
+              pm2 save
+              
+              echo "Application deployed and running with PM2"
 
               EOF
