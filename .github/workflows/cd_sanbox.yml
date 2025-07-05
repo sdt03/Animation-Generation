@@ -40,5 +40,6 @@ jobs:
           fi
 
           source venv/bin/activate
+          cd ..
           pip install -r requirements.txt
           python main.py
