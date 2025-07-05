@@ -34,6 +34,11 @@ jobs:
           cd animation-generation
           git pull origin main
           cd sandbox/app
+          
+          if [ ! -d "venv" ]; then 
+            ptyhon3 -m venv venv 
+          fi
+
           source venv/bin/activate
           pip install -r requirements.txt
           python main.py
